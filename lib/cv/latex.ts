@@ -19,7 +19,8 @@ const SPECIAL: [RegExp, string][] = [
   [/×/g, "$\\times$"],
   [/—/g, "---"],
   [/–/g, "--"],
-  [/[“”]/g, (m) => (m === "“" ? "``" : "''")] as unknown as [RegExp, string],
+  [/“/g, "``"],
+  [/”/g, "''"],
   [/[’‘]/g, "'"],
 ]
 

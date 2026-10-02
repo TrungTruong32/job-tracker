@@ -67,18 +67,43 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"cv_versions": {
+                },"cv_documents": {
                   Row: {
-                    "created_at": string,"extracted_text": string,"file_path": string | null,"file_type": string | null,"id": string,"is_default": boolean,"name": string,"updated_at": string,"workspace_id": string
+                    "content": NonNullable<Json>,"created_at": string,"id": string,"name": string,"style": NonNullable<Json>,"target_role": string | null,"target_tags": (string)[],"template": string,"updated_at": string,"workspace_id": string
                   }
                   Insert: {
-                    "created_at"?: string,"extracted_text"?: string,"file_path"?: string | null,"file_type"?: string | null,"id"?: string,"is_default"?: boolean,"name": string,"updated_at"?: string,"workspace_id": string
+                    "content"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"name": string,"style"?: NonNullable<Json>,"target_role"?: string | null,"target_tags"?: (string)[],"template"?: string,"updated_at"?: string,"workspace_id": string
                   }
                   Update: {
-                    "created_at"?: string,"extracted_text"?: string,"file_path"?: string | null,"file_type"?: string | null,"id"?: string,"is_default"?: boolean,"name"?: string,"updated_at"?: string,"workspace_id"?: string
+                    "content"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"name"?: string,"style"?: NonNullable<Json>,"target_role"?: string | null,"target_tags"?: (string)[],"template"?: string,"updated_at"?: string,"workspace_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "cv_documents_workspace_id_fkey"
+      columns: ["workspace_id"]
+isOneToOne: false
+      referencedRelation: "workspaces"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"cv_versions": {
+                  Row: {
+                    "created_at": string,"document_id": string | null,"extracted_text": string,"file_path": string | null,"file_type": string | null,"id": string,"is_default": boolean,"name": string,"updated_at": string,"workspace_id": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"document_id"?: string | null,"extracted_text"?: string,"file_path"?: string | null,"file_type"?: string | null,"id"?: string,"is_default"?: boolean,"name": string,"updated_at"?: string,"workspace_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"document_id"?: string | null,"extracted_text"?: string,"file_path"?: string | null,"file_type"?: string | null,"id"?: string,"is_default"?: boolean,"name"?: string,"updated_at"?: string,"workspace_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "cv_versions_document_fk"
+      columns: ["document_id","workspace_id"]
+isOneToOne: false
+      referencedRelation: "cv_documents"
+      referencedColumns: ["id","workspace_id"]
+    },{
       foreignKeyName: "cv_versions_workspace_id_fkey"
       columns: ["workspace_id"]
 isOneToOne: false

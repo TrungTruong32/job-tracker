@@ -6,8 +6,9 @@ import { CvFitSchema, JdSummarySchema, type StoredCvFit } from "@/lib/ai/parse"
 import { nextKeyAction } from "@/lib/ai/key-policy"
 import { encryptSecret } from "@/lib/crypto"
 import { todayStr } from "@/lib/format"
-import { requireUser } from "@/lib/supabase/server"
-import type { Json } from "@/lib/supabase/types"
+import { cookies } from "next/headers"
+import { WS_COOKIE, getWorkspaces, workspaceContext } from "./queries"
+import type { Database, Json } from "@/lib/supabase/types"
 import type { ActionResult, ApplicationInput, EventInput } from "./types"
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày không hợp lệ")
@@ -57,16 +58,16 @@ function refresh(...paths: string[]) {
 export async function createApplication(input: ApplicationInput): Promise<ActionResult<{ id: string }>> {
   try {
     const v = ApplicationSchema.parse(input)
-    const { supabase } = await requireUser()
+    const { supabase, ws } = await workspaceContext()
     const { data, error } = await supabase
       .from("applications")
-      .insert({ ...v, ai_summary: v.ai_summary as Json })
+      .insert({ ...v, workspace_id: ws.id, ai_summary: v.ai_summary as Json })
       .select("id")
       .single()
     if (error) throw error
     const { error: evErr } = await supabase
       .from("stage_events")
-      .insert({ application_id: data.id, stage_id: v.stage_id, event_date: v.applied_at, type: "stage_change" })
+      .insert({ workspace_id: ws.id, application_id: data.id, stage_id: v.stage_id, event_date: v.applied_at, type: "stage_change" })
     if (evErr) throw evErr
     refresh()
     return { ok: true, data: { id: data.id } }
@@ -78,7 +79,7 @@ export async function createApplication(input: ApplicationInput): Promise<Action
 export async function updateApplication(id: string, input: ApplicationInput): Promise<ActionResult> {
   try {
     const v = ApplicationSchema.parse(input)
-    const { supabase } = await requireUser()
+    const { supabase } = await workspaceContext()
     const { data: current, error: curErr } = await supabase.from("applications").select("stage_id").eq("id", id).single()
     if (curErr) throw curErr
     const { stage_id, ...rest } = v
@@ -102,7 +103,7 @@ export async function updateApplication(id: string, input: ApplicationInput): Pr
 export async function deleteApplication(id: string): Promise<ActionResult> {
   try {
     uuid.parse(id)
-    const { supabase } = await requireUser()
+    const { supabase } = await workspaceContext()
     const { error } = await supabase.from("applications").delete().eq("id", id)
     if (error) throw error
     refresh()
@@ -116,7 +117,7 @@ export async function moveApplication(id: string, stageId: string): Promise<Acti
   try {
     uuid.parse(id)
     uuid.parse(stageId)
-    const { supabase } = await requireUser()
+    const { supabase } = await workspaceContext()
     const { error } = await supabase.rpc("move_application", { p_app: id, p_stage: stageId, p_date: todayStr() })
     if (error) throw error
     refresh(`/applications/${id}`)
@@ -129,7 +130,7 @@ export async function moveApplication(id: string, stageId: string): Promise<Acti
 export async function saveAiSummary(id: string, summary: unknown): Promise<ActionResult> {
   try {
     const v = JdSummarySchema.parse(summary)
-    const { supabase } = await requireUser()
+    const { supabase } = await workspaceContext()
     const { error } = await supabase.from("applications").update({ ai_summary: v as Json }).eq("id", id)
     if (error) throw error
     refresh(`/applications/${id}`)
@@ -146,7 +147,7 @@ export async function saveAiFit(id: string, fit: unknown, cvVersionId: string | 
       cv_version_id: cvVersionId,
       evaluated_at: new Date().toISOString(),
     }
-    const { supabase } = await requireUser()
+    const { supabase } = await workspaceContext()
     const { error } = await supabase.from("applications").update({ ai_fit: stored as Json }).eq("id", id)
     if (error) throw error
     refresh(`/applications/${id}`)
@@ -159,15 +160,15 @@ export async function saveAiFit(id: string, fit: unknown, cvVersionId: string | 
 // ---------- timeline ----------
 
 async function touch(applicationId: string) {
-  const { supabase } = await requireUser()
+  const { supabase } = await workspaceContext()
   await supabase.from("applications").update({ last_activity_at: new Date().toISOString() }).eq("id", applicationId)
 }
 
 export async function addEvent(applicationId: string, input: EventInput): Promise<ActionResult> {
   try {
     const v = EventSchema.parse(input)
-    const { supabase } = await requireUser()
-    const { error } = await supabase.from("stage_events").insert({ ...v, application_id: applicationId })
+    const { supabase, ws } = await workspaceContext()
+    const { error } = await supabase.from("stage_events").insert({ ...v, workspace_id: ws.id, application_id: applicationId })
     if (error) throw error
     await touch(applicationId)
     refresh(`/applications/${applicationId}`)
@@ -180,7 +181,7 @@ export async function addEvent(applicationId: string, input: EventInput): Promis
 export async function updateEvent(id: string, applicationId: string, input: EventInput): Promise<ActionResult> {
   try {
     const v = EventSchema.parse(input)
-    const { supabase } = await requireUser()
+    const { supabase } = await workspaceContext()
     const { error } = await supabase.from("stage_events").update(v).eq("id", id)
     if (error) throw error
     refresh(`/applications/${applicationId}`)
@@ -192,7 +193,7 @@ export async function updateEvent(id: string, applicationId: string, input: Even
 
 export async function deleteEvent(id: string, applicationId: string): Promise<ActionResult> {
   try {
-    const { supabase } = await requireUser()
+    const { supabase } = await workspaceContext()
     const { error } = await supabase.from("stage_events").delete().eq("id", id)
     if (error) throw error
     refresh(`/applications/${applicationId}`)
@@ -218,14 +219,14 @@ export async function createCv(input: {
 }): Promise<ActionResult<{ id: string }>> {
   try {
     const v = CvSchema.parse(input)
-    const { supabase, user } = await requireUser()
-    if (input.file_path && !input.file_path.startsWith(`${user.id}/`)) throw new Error("Đường dẫn file không hợp lệ")
-    const { count } = await supabase.from("cv_versions").select("id", { count: "exact", head: true })
+    const { supabase, ws } = await workspaceContext()
+    if (input.file_path && !input.file_path.startsWith(`${ws.id}/`)) throw new Error("Đường dẫn file không hợp lệ")
+    const { count } = await supabase.from("cv_versions").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id)
     const makeDefault = input.is_default || !count
-    if (makeDefault) await supabase.from("cv_versions").update({ is_default: false }).eq("is_default", true)
+    if (makeDefault) await supabase.from("cv_versions").update({ is_default: false }).eq("workspace_id", ws.id).eq("is_default", true)
     const { data, error } = await supabase
       .from("cv_versions")
-      .insert({ ...v, file_path: input.file_path, file_type: input.file_type, is_default: makeDefault })
+      .insert({ ...v, workspace_id: ws.id, file_path: input.file_path, file_type: input.file_type, is_default: makeDefault })
       .select("id")
       .single()
     if (error) throw error
@@ -239,7 +240,7 @@ export async function createCv(input: {
 export async function updateCv(id: string, input: { name: string; extracted_text: string }): Promise<ActionResult> {
   try {
     const v = CvSchema.parse(input)
-    const { supabase } = await requireUser()
+    const { supabase } = await workspaceContext()
     const { error } = await supabase.from("cv_versions").update(v).eq("id", id)
     if (error) throw error
     refresh("/cv")
@@ -251,8 +252,8 @@ export async function updateCv(id: string, input: { name: string; extracted_text
 
 export async function setDefaultCv(id: string): Promise<ActionResult> {
   try {
-    const { supabase } = await requireUser()
-    await supabase.from("cv_versions").update({ is_default: false }).eq("is_default", true)
+    const { supabase, ws } = await workspaceContext()
+    await supabase.from("cv_versions").update({ is_default: false }).eq("workspace_id", ws.id).eq("is_default", true)
     const { error } = await supabase.from("cv_versions").update({ is_default: true }).eq("id", id)
     if (error) throw error
     refresh("/cv")
@@ -264,7 +265,7 @@ export async function setDefaultCv(id: string): Promise<ActionResult> {
 
 export async function deleteCv(id: string): Promise<ActionResult> {
   try {
-    const { supabase } = await requireUser()
+    const { supabase } = await workspaceContext()
     const { data: cv } = await supabase.from("cv_versions").select("file_path").eq("id", id).single()
     const { error } = await supabase.from("cv_versions").delete().eq("id", id)
     if (error) throw error
@@ -290,15 +291,19 @@ export async function saveSettings(input: z.input<typeof SettingsSchema>): Promi
   try {
     const v = SettingsSchema.parse(input)
     if (v.ai_base_url && !/^https?:\/\//.test(v.ai_base_url)) throw new Error("Base URL phải bắt đầu bằng http:// hoặc https://")
-    const { supabase, user } = await requireUser()
-    const patch: Record<string, unknown> = {
-      user_id: user.id,
+    const { supabase, ws } = await workspaceContext()
+    if (ws.role !== "owner") throw new Error("Chỉ chủ workspace được đổi cài đặt")
+    const patch: Database["public"]["Tables"]["settings"]["Update"] = {
       ai_provider: v.ai_provider,
       ai_base_url: v.ai_base_url,
       ai_model: v.ai_model,
       stale_days: v.stale_days,
     }
-    const { data: stored } = await supabase.from("settings").select("ai_base_url, ai_api_key_encrypted").maybeSingle()
+    const { data: stored } = await supabase
+      .from("settings")
+      .select("ai_base_url, ai_api_key_encrypted")
+      .eq("workspace_id", ws.id)
+      .maybeSingle()
     const action = nextKeyAction(
       { ai_base_url: stored?.ai_base_url ?? null, has_key: !!stored?.ai_api_key_encrypted },
       { baseUrl: v.ai_base_url, apiKey: v.ai_api_key },
@@ -309,7 +314,7 @@ export async function saveSettings(input: z.input<typeof SettingsSchema>): Promi
     } else if (action === "remove") {
       patch.ai_api_key_encrypted = null
     }
-    const { error } = await supabase.from("settings").upsert(patch as never)
+    const { error } = await supabase.from("settings").update(patch).eq("workspace_id", ws.id)
     if (error) throw error
     refresh("/settings")
     return { ok: true, data: undefined }
@@ -332,8 +337,8 @@ export async function saveStages(input: z.input<typeof StageListSchema>): Promis
     const list = StageListSchema.parse(input)
     if (!list.length) throw new Error("Cần ít nhất một vòng")
     if (!list.some((s) => s.kind === "active")) throw new Error("Cần ít nhất một vòng loại 'đang chạy'")
-    const { supabase } = await requireUser()
-    const { data: existing, error: exErr } = await supabase.from("stages").select("id")
+    const { supabase, ws } = await workspaceContext()
+    const { data: existing, error: exErr } = await supabase.from("stages").select("id").eq("workspace_id", ws.id)
     if (exErr) throw exErr
     const keep = new Set(list.map((s) => s.id).filter(Boolean))
     const removed = existing.filter((s) => !keep.has(s.id)).map((s) => s.id)
@@ -350,10 +355,90 @@ export async function saveStages(input: z.input<typeof StageListSchema>): Promis
       const row = { name: s.name, kind: s.kind, position }
       const { error } = s.id
         ? await supabase.from("stages").update(row).eq("id", s.id)
-        : await supabase.from("stages").insert(row)
+        : await supabase.from("stages").insert({ ...row, workspace_id: ws.id })
       if (error) throw error
     }
     refresh("/settings")
+    return { ok: true, data: undefined }
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+// ---------- workspaces ----------
+
+export async function switchWorkspace(id: string): Promise<ActionResult> {
+  try {
+    uuid.parse(id)
+    if (!(await getWorkspaces()).some((w) => w.id === id)) throw new Error("Bạn không thuộc workspace này")
+    const jar = await cookies()
+    jar.set(WS_COOKIE, id, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: true })
+    revalidatePath("/", "layout")
+    return { ok: true, data: undefined }
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+export async function renameWorkspace(name: string): Promise<ActionResult> {
+  try {
+    const v = z.string().trim().min(1, "Tên workspace không được trống").max(80).parse(name)
+    const { supabase, ws } = await workspaceContext()
+    if (ws.role !== "owner") throw new Error("Chỉ chủ workspace được đổi tên")
+    const { error } = await supabase.from("workspaces").update({ name: v }).eq("id", ws.id)
+    if (error) throw error
+    revalidatePath("/", "layout")
+    return { ok: true, data: undefined }
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+export async function inviteMember(email: string): Promise<ActionResult> {
+  try {
+    const v = z.email("Email không hợp lệ").parse(email.trim().toLowerCase())
+    const { supabase, ws } = await workspaceContext()
+    if (ws.role !== "owner") throw new Error("Chỉ chủ workspace được mời thành viên")
+    const { error } = await supabase.from("workspace_members").insert({ workspace_id: ws.id, email: v, role: "member" })
+    if (error?.code === "23505") throw new Error("Email này đã có trong workspace")
+    if (error) throw error
+    refresh("/settings")
+    return { ok: true, data: undefined }
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+export async function removeMember(memberId: string): Promise<ActionResult> {
+  try {
+    uuid.parse(memberId)
+    const { supabase, ws } = await workspaceContext()
+    if (ws.role !== "owner") throw new Error("Chỉ chủ workspace được xoá thành viên")
+    const { data, error } = await supabase
+      .from("workspace_members")
+      .delete()
+      .eq("workspace_id", ws.id)
+      .eq("id", memberId)
+      .eq("role", "member")
+      .select("id")
+    if (error) throw error
+    if (!data.length) throw new Error("Không xoá được thành viên này")
+    refresh("/settings")
+    return { ok: true, data: undefined }
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+export async function leaveWorkspace(): Promise<ActionResult> {
+  try {
+    const { supabase, user, ws } = await workspaceContext()
+    if (ws.role === "owner") throw new Error("Chủ workspace không thể rời workspace của mình")
+    const { error } = await supabase.from("workspace_members").delete().eq("workspace_id", ws.id).eq("user_id", user.id)
+    if (error) throw error
+    const jar = await cookies()
+    jar.delete(WS_COOKIE)
+    revalidatePath("/", "layout")
     return { ok: true, data: undefined }
   } catch (e) {
     return fail(e)

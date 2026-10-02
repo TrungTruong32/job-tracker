@@ -18,7 +18,7 @@ import { createClient } from "@/lib/supabase/client"
 
 type Draft = { name: string; text: string; file: File | null; type: CvFileType | null; isDefault: boolean; tooShort: boolean }
 
-export function CvManager({ cvs, usage }: { cvs: CvVersion[]; usage: Record<string, number> }) {
+export function CvManager({ cvs, usage, workspaceId }: { cvs: CvVersion[]; usage: Record<string, number>; workspaceId: string }) {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [editing, setEditing] = useState<CvVersion | null>(null)
   const [reading, setReading] = useState(false)
@@ -59,9 +59,7 @@ export function CvManager({ cvs, usage }: { cvs: CvVersion[]; usage: Record<stri
       let filePath: string | null = null
       if (draft.file && draft.type) {
         const supabase = createClient()
-        const { data: auth } = await supabase.auth.getUser()
-        if (!auth.user) return void toast.error("Phiên đăng nhập đã hết, đăng nhập lại")
-        filePath = `${auth.user.id}/${crypto.randomUUID()}.${draft.type}`
+        filePath = `${workspaceId}/${crypto.randomUUID()}.${draft.type}`
         const { error } = await supabase.storage.from("cvs").upload(filePath, draft.file, {
           contentType: draft.type === "pdf" ? "application/pdf" : "text/plain",
         })

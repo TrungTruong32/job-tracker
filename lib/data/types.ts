@@ -49,3 +49,10 @@ export type EventInput = {
   notes: string | null
   questions: string | null
 }
+
+export type Member = {
+  id: string
+  email: string
+  role: "owner" | "member"
+  joined: boolean
+}

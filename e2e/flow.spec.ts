@@ -163,3 +163,55 @@ test("score the application against the CV", async ({ page }, info) => {
   await page.reload()
   await expect(page.getByTestId("cv-fit").getByText("82%")).toBeVisible()
 })
+
+test("owner invites a member who sees the shared data until removed", async ({ page, browser }, info) => {
+  test.skip(info.project.name !== "laptop", "one device is enough for the sharing flow")
+  await login(page, info.project.name)
+  await page.goto("/settings")
+  await page.getByLabel("Mời thành viên").fill("E2E-Member@local.test")
+  await page.getByRole("button", { name: "Mời", exact: true }).click()
+  const members = page.getByTestId("members")
+  await expect(members.getByText("e2e-member@local.test")).toBeVisible()
+  await expect(members.getByText("Đang chờ")).toBeVisible()
+
+  // Member signs in on another device and sees the owner's applications
+  const memberCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const member = await memberCtx.newPage()
+  await member.goto("/login")
+  const form = member.getByTestId("dev-login")
+  await form.getByLabel("Email").fill("e2e-member@local.test")
+  await form.getByLabel("Mật khẩu").fill("e2e-password")
+  await form.getByRole("button", { name: "Đăng nhập dev" }).click()
+  await expect(member.getByRole("heading", { name: "Đơn ứng tuyển" })).toBeVisible()
+  await expect(member.getByText("ABC AI").filter({ visible: true }).first()).toBeVisible()
+  await member.goto("/settings")
+  await expect(member.getByText(/Bạn là thành viên/)).toBeVisible()
+  await expect(member.getByLabel("Mời thành viên")).toHaveCount(0)
+  await expect(member.getByLabel("API key")).toHaveCount(0)
+
+  // Owner sees the member as joined, then removes them
+  await page.reload()
+  await expect(members.getByText("Đang chờ")).toHaveCount(0)
+  page.once("dialog", (d) => d.accept())
+  await page.getByRole("button", { name: "Xoá e2e-member@local.test" }).click()
+  await expect(page.getByText("Đã xoá thành viên")).toBeVisible()
+
+  // Member is locked out on the next request
+  await member.goto("/")
+  await expect(member).toHaveURL(/\/login\?error=forbidden/)
+  await memberCtx.close()
+})
+
+test("a stranger who was never invited is turned away", async ({ browser }, info) => {
+  test.skip(info.project.name !== "laptop", "once is enough")
+  const ctx = await browser.newContext()
+  const page = await ctx.newPage()
+  await page.goto("/login")
+  const form = page.getByTestId("dev-login")
+  await form.getByLabel("Email").fill("e2e-stranger@local.test")
+  await form.getByLabel("Mật khẩu").fill("e2e-password")
+  await form.getByRole("button", { name: "Đăng nhập dev" }).click()
+  await expect(page).toHaveURL(/\/login\?error=forbidden/)
+  await expect(page.getByText("Email này không có quyền truy cập")).toBeVisible()
+  await ctx.close()
+})

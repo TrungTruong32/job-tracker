@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
-import { isAuthorizedFromEnv } from "@/lib/auth/allowed"
+import { canSignInFromEnv } from "@/lib/auth/allowed"
 
 const PUBLIC_PATHS = ["/login", "/auth"]
 
@@ -39,7 +39,13 @@ export async function proxy(request: NextRequest) {
     return r
   }
 
-  if (user && !isAuthorizedFromEnv(user)) {
+  const decision = user
+    ? await canSignInFromEnv(user, async () => {
+        const { data } = await supabase.rpc("has_workspace_access")
+        return data === true
+      })
+    : null
+  if (user && !decision?.ok) {
     await supabase.auth.signOut()
     if (path.startsWith("/api/")) return NextResponse.json({ error: "Không có quyền" }, { status: 403 })
     return redirectTo("/login", "?error=forbidden")

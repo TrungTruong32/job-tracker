@@ -5,7 +5,9 @@ import { usePathname, useRouter } from "next/navigation"
 import { BarChart3, BriefcaseBusiness, FileText, LogOut, Moon, Settings, Sun } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher"
 import { createClient } from "@/lib/supabase/client"
+import type { WorkspaceLite } from "@/lib/workspace/pick"
 import { cn } from "@/lib/utils"
 
 export const NAV_ITEMS = [
@@ -48,7 +50,7 @@ export function ThemeToggle({ className, withLabel }: { className?: string; with
 const sideItem =
   "flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground justify-center xl:justify-start"
 
-export function SideNav({ email }: { email: string }) {
+export function SideNav({ email, workspaces, current }: { email: string; workspaces: WorkspaceLite[]; current: WorkspaceLite }) {
   const pathname = usePathname()
   const signOut = useSignOut()
   return (
@@ -57,8 +59,14 @@ export function SideNav({ email }: { email: string }) {
         <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <BriefcaseBusiness className="size-4" />
         </span>
-        <span className="hidden font-semibold xl:inline">Job Tracker</span>
+        <span className="hidden min-w-0 xl:block">
+          <span className="block font-semibold">Job Tracker</span>
+          <span className="block truncate text-xs text-muted-foreground" title={current.name}>
+            {current.name}
+          </span>
+        </span>
       </Link>
+      <WorkspaceSwitcher workspaces={workspaces} currentId={current.id} className="mb-3 hidden px-1 xl:block" />
       <nav className="flex flex-1 flex-col gap-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
           <Tooltip key={href}>

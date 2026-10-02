@@ -24,7 +24,9 @@ export function Board({
   stages,
   cvs,
   settings,
+  workspaceName,
 }: {
+  workspaceName?: string
   initialApps: Application[]
   stages: Stage[]
   cvs: CvVersion[]
@@ -62,7 +64,10 @@ export function Board({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold sm:text-2xl">Đơn ứng tuyển</h1>
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold sm:text-2xl">Đơn ứng tuyển</h1>
+          {workspaceName && <p className="truncate text-xs text-muted-foreground xl:hidden">{workspaceName}</p>}
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border p-0.5" role="group" aria-label="Kiểu hiển thị">
             {(

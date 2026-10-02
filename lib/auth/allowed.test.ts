@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isAllowedEmail, isAuthorizedUser, parseAllowedEmails } from "./allowed"
+import { canSignIn, isAllowedEmail, parseAllowedEmails } from "./allowed"
 
 describe("allowed emails", () => {
   const allowed = parseAllowedEmails(" Me@Gmail.com, other@x.dev ;third@y.io")
@@ -21,25 +21,28 @@ describe("allowed emails", () => {
   })
 })
 
-describe("isAuthorizedUser", () => {
+
+describe("canSignIn", () => {
   const allowed = parseAllowedEmails("me@gmail.com")
-  const google = { email: "me@gmail.com", app_metadata: { provider: "google" } }
-  const password = { email: "me@gmail.com", app_metadata: { provider: "email" } }
+  const google = (email: string) => ({ email, app_metadata: { provider: "google" } })
+  const never = async () => {
+    throw new Error("should not query")
+  }
 
-  it("accepts an allowlisted Google user", () => {
-    expect(isAuthorizedUser(google, allowed, false)).toBe(true)
+  it("lets allowlisted users in without a DB lookup and marks them owners", async () => {
+    await expect(canSignIn(google("me@gmail.com"), allowed, false, never)).resolves.toEqual({ ok: true, personal: true })
   })
 
-  it("rejects email/password users unless dev login is on", () => {
-    expect(isAuthorizedUser(password, allowed, false)).toBe(false)
-    expect(isAuthorizedUser(password, allowed, true)).toBe(true)
+  it("lets invited users in without a personal workspace", async () => {
+    await expect(canSignIn(google("friend@gmail.com"), allowed, false, async () => true)).resolves.toEqual({ ok: true, personal: false })
   })
 
-  it("rejects a Google user who is not allowlisted", () => {
-    expect(isAuthorizedUser({ ...google, email: "x@gmail.com" }, allowed, false)).toBe(false)
+  it("rejects users who are neither allowlisted nor invited", async () => {
+    await expect(canSignIn(google("x@gmail.com"), allowed, false, async () => false)).resolves.toEqual({ ok: false, personal: false })
   })
 
-  it("rejects a missing user", () => {
-    expect(isAuthorizedUser(null, allowed, true)).toBe(false)
+  it("rejects non-Google sign-ins in production even when invited", async () => {
+    const pw = { email: "friend@gmail.com", app_metadata: { provider: "email" } }
+    await expect(canSignIn(pw, allowed, false, async () => true)).resolves.toEqual({ ok: false, personal: false })
   })
 })

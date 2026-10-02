@@ -1,7 +1,8 @@
 import "server-only"
 import { createServerClient } from "@supabase/ssr"
+import { cache } from "react"
 import { cookies } from "next/headers"
-import { isAuthorizedFromEnv } from "@/lib/auth/allowed"
+import { canSignInFromEnv } from "@/lib/auth/allowed"
 import type { Database } from "./types"
 
 export async function createServerSupabase() {
@@ -28,10 +29,14 @@ export async function createServerSupabase() {
  * Signed-in, allowlisted user, or throws. The proxy also checks this, but every
  * action/route/page re-checks here so nothing depends on the proxy matcher alone.
  */
-export async function requireUser() {
+export const requireUser = cache(async () => {
   const supabase = await createServerSupabase()
   const { data, error } = await supabase.auth.getUser()
   if (error || !data.user) throw new Error("Chưa đăng nhập")
-  if (!isAuthorizedFromEnv(data.user)) throw new Error("Không có quyền truy cập")
-  return { supabase, user: data.user }
-}
+  const decision = await canSignInFromEnv(data.user, async () => {
+    const { data: ok } = await supabase.rpc("has_workspace_access")
+    return ok === true
+  })
+  if (!decision.ok) throw new Error("Không có quyền truy cập")
+  return { supabase, user: data.user, canOwn: decision.personal }
+})

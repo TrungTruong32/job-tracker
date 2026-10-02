@@ -15,15 +15,24 @@ export function isAllowedEmail(email: string | null | undefined, allowed: Set<st
 
 type UserLike = { email?: string | null; app_metadata?: { provider?: string } } | null | undefined
 
+export type SignInDecision = { ok: boolean; personal: boolean }
+
 /**
- * Allowlisted email AND signed in with Google. Email/password accounts are only
- * accepted when the local dev login is enabled.
+ * Who may use the app: allowlisted emails (they also own a personal workspace),
+ * or anyone invited to a workspace. Production accepts Google sign-ins only.
+ * `hasInvite` hits the DB, so it's only called when the allowlist says no.
  */
-export function isAuthorizedUser(user: UserLike, allowed: Set<string>, devLogin: boolean): boolean {
-  if (!user || !isAllowedEmail(user.email, allowed)) return false
-  return devLogin || user.app_metadata?.provider === "google"
+export async function canSignIn(
+  user: UserLike,
+  allowed: Set<string>,
+  devLogin: boolean,
+  hasInvite: () => Promise<boolean>,
+): Promise<SignInDecision> {
+  if (!user || !(devLogin || user.app_metadata?.provider === "google")) return { ok: false, personal: false }
+  if (isAllowedEmail(user.email, allowed)) return { ok: true, personal: true }
+  return { ok: await hasInvite(), personal: false }
 }
 
-export function isAuthorizedFromEnv(user: UserLike): boolean {
-  return isAuthorizedUser(user, parseAllowedEmails(process.env.ALLOWED_EMAILS), process.env.NEXT_PUBLIC_DEV_LOGIN === "1")
+export function canSignInFromEnv(user: UserLike, hasInvite: () => Promise<boolean>): Promise<SignInDecision> {
+  return canSignIn(user, parseAllowedEmails(process.env.ALLOWED_EMAILS), process.env.NEXT_PUBLIC_DEV_LOGIN === "1", hasInvite)
 }

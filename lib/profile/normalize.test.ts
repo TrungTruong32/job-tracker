@@ -93,6 +93,11 @@ describe("normalizeParsed", () => {
     expect(normalizeMonth("Marketing 2024")).toBe("Marketing 2024")
   })
 
+  it("keeps a project's parent company for linking", () => {
+    const r = normalizeParsed({ items: [{ section: "project", data: { name: "Pipeline", parent_company: " Acme " } }] })
+    expect(r.items[0]).toMatchObject({ section: "project", parent: "Acme", data: { name: "Pipeline" } })
+  })
+
   it("survives junk", () => {
     expect(normalizeParsed(null)).toEqual({ basics: {}, items: [], dropped: 0 })
   })

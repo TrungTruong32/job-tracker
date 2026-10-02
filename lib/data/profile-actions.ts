@@ -145,6 +145,7 @@ const ImportSchema = z.object({
         data: z.record(z.string(), z.unknown()),
         action: z.enum(["add", "skip", "merge", "overwrite"]),
         matchId: uuid.nullable(),
+        parent: z.string().max(200).optional(),
       }),
     )
     .max(500, "CV có quá nhiều mục (tối đa 500)"),

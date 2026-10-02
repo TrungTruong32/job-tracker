@@ -1,6 +1,6 @@
 import type { Section } from "@/lib/profile/schema"
 
-export type FieldType = "text" | "url" | "month" | "end" | "list" | "textarea"
+export type FieldType = "text" | "url" | "month" | "end" | "list" | "textarea" | "experience"
 export type Field = { key: string; label: string; type: FieldType; required?: boolean; placeholder?: string; wide?: boolean }
 
 // Form layout per section; keys match lib/profile/schema.ts.
@@ -24,6 +24,7 @@ export const FIELDS: Record<Section, Field[]> = {
   project: [
     { key: "name", label: "Tên dự án", type: "text", required: true },
     { key: "role", label: "Vai trò", type: "text" },
+    { key: "experience_id", label: "Thuộc kinh nghiệm", type: "experience" },
     { key: "url", label: "Link", type: "url", wide: true },
     { key: "start", label: "Từ", type: "month" },
     { key: "end", label: "Đến", type: "end" },

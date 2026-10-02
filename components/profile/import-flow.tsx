@@ -121,7 +121,9 @@ export function ImportFlow({
     startTransition(async () => {
       const res = await commitImport({
         basics: basicsPatch,
-        rows: rows!.filter((r) => r.action !== "skip").map((r) => ({ section: r.section, data: r.data, action: r.action, matchId: r.match?.id ?? null })),
+        rows: rows!
+          .filter((r) => r.action !== "skip")
+          .map((r) => ({ section: r.section, data: r.data, action: r.action, matchId: r.match?.id ?? null, parent: r.parent })),
       })
       if (!res.ok) return void toast.error(res.error)
       toast.success(`Đã nhập: thêm ${res.data.added}, cập nhật ${res.data.updated} mục`)

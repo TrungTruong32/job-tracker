@@ -192,6 +192,9 @@ export function ProfileView({ basics, items }: { basics: Basics; items: ProfileI
         section={editing?.section ?? "experience"}
         item={editing?.item}
         tagSuggestions={allTags}
+        experiences={items
+          .filter((i) => i.section === "experience")
+          .map((i) => ({ id: i.id, label: [itemTitle("experience", i.data), i.data.company].filter(Boolean).join(" | ") }))}
       />
       <BasicsDialog open={basicsOpen} onOpenChange={setBasicsOpen} basics={basics} />
     </div>

@@ -77,7 +77,8 @@ function normalizeData(section: Section, raw: Record<string, unknown>): Record<s
   return d
 }
 
-export type ParsedItem = { section: Section; data: Record<string, unknown> }
+/** `parent`: for a sub-project, the company it belongs to (linked to an experience on import). */
+export type ParsedItem = { section: Section; data: Record<string, unknown>; parent?: string }
 
 /** Clean up an AI `parse_cv` result; items that don't fit their schema are dropped and counted. */
 export function normalizeParsed(raw: unknown): { basics: Basics; items: ParsedItem[]; dropped: number } {
@@ -107,7 +108,9 @@ export function normalizeParsed(raw: unknown): { basics: Basics; items: ParsedIt
       continue
     }
     const parsed = ItemDataSchemas[section as Section].safeParse(normalizeData(section as Section, data as Record<string, unknown>))
-    if (parsed.success) items.push({ section: section as Section, data: parsed.data as Record<string, unknown> })
+    const parentRaw = (data as Record<string, unknown>).parent_company
+    const parent = section === "project" && typeof parentRaw === "string" && parentRaw.trim() ? parentRaw.trim() : undefined
+    if (parsed.success) items.push({ section: section as Section, data: parsed.data as Record<string, unknown>, ...(parent ? { parent } : {}) })
     else dropped++
   }
   return { basics: raw ? basics : ({} as Basics), items, dropped }

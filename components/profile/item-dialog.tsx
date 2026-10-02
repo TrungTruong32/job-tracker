@@ -7,6 +7,7 @@ import { ResponsiveDialog } from "@/components/responsive-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { NativeSelect } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
 import { createItem, deleteItem, duplicateItem, updateItem } from "@/lib/data/profile-actions"
 import { normalizeEnd, normalizeMonth } from "@/lib/profile/normalize"
@@ -50,22 +51,45 @@ export function ItemDialog({
   section,
   item,
   tagSuggestions,
+  experiences,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   section: Section
   item?: ProfileItem
   tagSuggestions: string[]
+  experiences: { id: string; label: string }[]
 }) {
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} title={`${item ? "Sửa" : "Thêm"} · ${sectionLabel(section)}`}>
-      {open && <ItemForm section={section} item={item} tagSuggestions={tagSuggestions} onDone={() => onOpenChange(false)} />}
+      {open && <ItemForm section={section} item={item} tagSuggestions={tagSuggestions} experiences={experiences} onDone={() => onOpenChange(false)} />}
     </ResponsiveDialog>
   )
 }
 
-function FieldInput({ f, value, onChange }: { f: Field; value: string; onChange: (v: string) => void }) {
+function FieldInput({
+  f,
+  value,
+  onChange,
+  experiences,
+}: {
+  f: Field
+  value: string
+  onChange: (v: string) => void
+  experiences: { id: string; label: string }[]
+}) {
   const id = `f-${f.key}`
+  if (f.type === "experience")
+    return (
+      <NativeSelect id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">— Dự án độc lập —</option>
+        {experiences.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.label}
+          </option>
+        ))}
+      </NativeSelect>
+    )
   if (f.type === "textarea") return <Textarea id={id} rows={3} value={value} onChange={(e) => onChange(e.target.value)} />
   if (f.type === "end") {
     const present = value === "present"
@@ -91,7 +115,19 @@ function FieldInput({ f, value, onChange }: { f: Field; value: string; onChange:
   )
 }
 
-function ItemForm({ section, item, tagSuggestions, onDone }: { section: Section; item?: ProfileItem; tagSuggestions: string[]; onDone: () => void }) {
+function ItemForm({
+  section,
+  item,
+  tagSuggestions,
+  experiences,
+  onDone,
+}: {
+  section: Section
+  item?: ProfileItem
+  tagSuggestions: string[]
+  experiences: { id: string; label: string }[]
+  onDone: () => void
+}) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(section, item?.data ?? {}))
   const [bullets, setBullets] = useState<Bullet[]>(() =>
     Array.isArray(item?.data.bullets)
@@ -128,7 +164,12 @@ function ItemForm({ section, item, tagSuggestions, onDone }: { section: Section;
                 {f.label}
                 {f.required && " *"}
               </Label>
-              <FieldInput f={f} value={draft[f.key] ?? ""} onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }) as Draft)} />
+              <FieldInput
+                f={f}
+                value={draft[f.key] ?? ""}
+                experiences={experiences}
+                onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }) as Draft)}
+              />
             </div>
           ))}
         </div>

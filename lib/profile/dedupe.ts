@@ -98,10 +98,11 @@ export type ImportRow = {
   match: Existing | null
   action: ImportAction
   newBits: string[]
+  parent?: string
 }
 
 /** Pair each parsed item with an existing duplicate (if any) and a default action. */
-export function planImport(existing: Existing[], parsed: { section: Section; data: Data }[]): ImportRow[] {
+export function planImport(existing: Existing[], parsed: { section: Section; data: Data; parent?: string }[]): ImportRow[] {
   return parsed.map((p, i) => {
     const id = findDuplicate(p.section, p.data, existing)
     const match = id ? existing.find((e) => e.id === id)! : null
@@ -112,6 +113,7 @@ export function planImport(existing: Existing[], parsed: { section: Section; dat
       match,
       action: match ? "skip" : "add",
       newBits: match ? mergeAdds(match.data, p.data) : [],
+      ...(p.parent ? { parent: p.parent } : {}),
     }
   })
 }

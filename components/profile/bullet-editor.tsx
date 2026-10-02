@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toBullets } from "@/lib/profile/normalize"
 import type { Bullet } from "@/lib/profile/schema"
+import { InlinePreview } from "./inline-preview"
 
 /** Edit a bullet list: Enter adds a bullet below, pasting several lines splits them, ↑↓ reorder. */
 export function BulletEditor({ value, onChange }: { value: Bullet[]; onChange: (v: Bullet[]) => void }) {
@@ -27,6 +28,7 @@ export function BulletEditor({ value, onChange }: { value: Bullet[]; onChange: (
         {value.map((b, i) => (
           <li key={b.id} className="flex items-start gap-1.5">
             <span className="mt-2 text-muted-foreground">•</span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <textarea
               ref={(el) => {
                 if (el) refs.current.set(b.id, el)
@@ -62,6 +64,8 @@ export function BulletEditor({ value, onChange }: { value: Bullet[]; onChange: (
                 onChange([...merged.slice(0, i + 1), ...rest, ...merged.slice(i + 1)])
               }}
             />
+            {/[*[]/.test(b.text) && <InlinePreview text={b.text} className="px-2 text-xs text-muted-foreground" />}
+            </span>
             <span className="flex shrink-0">
               <Button type="button" size="icon-xs" variant="ghost" aria-label="Lên" disabled={i === 0} onClick={() => move(i, -1)}>
                 <ArrowUp />
@@ -88,7 +92,9 @@ export function BulletEditor({ value, onChange }: { value: Bullet[]; onChange: (
       >
         <Plus /> Thêm bullet
       </Button>
-      <p className="text-xs text-muted-foreground">Enter: bullet mới · Shift+Enter: xuống dòng · dán nhiều dòng: tự tách bullet</p>
+      <p className="text-xs text-muted-foreground">
+        Enter: bullet mới · dán nhiều dòng: tự tách · <code>**đậm**</code> <code>*nghiêng*</code> <code>[chữ](https://…)</code>
+      </p>
     </div>
   )
 }

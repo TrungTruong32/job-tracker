@@ -61,14 +61,14 @@ export function buildParseCvMessages(cvText: string): ChatMessage[] {
 Sections and their data fields (dates as "MMM YYYY" or "YYYY", end may be "Present"):
 - "experience": company, title, location, start, end, bullets: string[], tech: string[]
 - "education": school, degree, field, start, end, gpa, bullets: string[]
-- "project": name, role, url, start, end, bullets: string[], tech: string[]
+- "project": name, role, url, start, end, bullets: string[], tech: string[], parent_company (when the project is listed under a job, the company of that job)
 - "publication": title, venue, authors, date, url
 - "skill": category, items: string[]   (one item per skill group as written in the CV)
 - "certification": name, issuer, date, url
 - "award": title, issuer, date, description
 - "language": name, level
 - "custom": section_title, title, subtitle, date, bullets: string[]   (anything else, e.g. activities)
-Rules: copy bullet text verbatim (no rewriting, no invented facts); keep the CV's original order; omit fields that are absent.`,
+Rules: copy bullet text verbatim (no rewriting, no invented facts); keep emphasis as **bold** / *italic* and links as [text](url) when visible; keep the CV's original order; omit fields that are absent.`,
     },
     { role: "user", content: text },
   ]

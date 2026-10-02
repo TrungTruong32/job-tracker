@@ -54,3 +54,4 @@ playwright-report/
 .vercel
 .env*
 .deploy.log
+.spike/

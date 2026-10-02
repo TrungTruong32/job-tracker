@@ -42,4 +42,20 @@ describe("buildImportWrites", () => {
     expect(buildImportWrites(existing, [row(["Z"], "add")]).inserts[0].position).toBe(-1)
     expect(() => buildImportWrites([], [row(["Z"])])).toThrow(/Tải lại/)
   })
+
+  it("links imported sub-projects to their company's experience (new or existing)", () => {
+    const w = buildImportWrites(existing, [
+      { section: "experience", action: "add", matchId: null, data: { company: "Acme Co., Ltd", title: "AI Intern", bullets: [], tech: [] } },
+      { section: "project", action: "add", matchId: null, parent: "Acme", data: { name: "Data Pipeline", bullets: [], tech: [] } },
+      { section: "project", action: "add", matchId: null, parent: "x", data: { name: "Old Co project", bullets: [], tech: [] } },
+      { section: "project", action: "add", matchId: null, parent: "Nowhere Inc", data: { name: "Solo", bullets: [], tech: [] } },
+    ])
+    const exp = w.inserts.find((i) => i.section === "experience")!
+    const proj = (name: string) => w.inserts.find((i) => i.data.name === name)!
+    expect(exp.id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(proj("Data Pipeline").data.experience_id).toBe(exp.id)
+    expect(proj("Old Co project").data.experience_id).toBe("e1")
+    expect(proj("Solo").data.experience_id).toBeUndefined()
+  })
 })
+

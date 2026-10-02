@@ -31,7 +31,7 @@ const list = z.array(z.string().trim().min(1)).default([])
 export const ItemDataSchemas = {
   experience: z.object({ company: str, title: str, location: opt, start: date, end, bullets, tech: list }),
   education: z.object({ school: str, degree: opt, field: opt, start: date, end, gpa: opt, bullets }),
-  project: z.object({ name: str, role: opt, url: opt, start: date, end, bullets, tech: list }),
+  project: z.object({ name: str, role: opt, url: opt, start: date, end, bullets, tech: list, experience_id: opt }),
   publication: z.object({ title: str, venue: opt, authors: opt, date, url: opt }),
   skill: z.object({ category: str, items: list }),
   certification: z.object({ name: str, issuer: opt, date, url: opt }),

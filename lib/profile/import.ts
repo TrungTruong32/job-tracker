@@ -1,10 +1,16 @@
-import { bulletKey, mergeData } from "./dedupe"
+import { bulletKey, mergeData, textKey } from "./dedupe"
 import { positionsForNew } from "./positions"
 import { BasicsSchema, ItemDataSchemas, SECTION_KEYS, type Basics, type Bullet, type Section } from "./schema"
 
 type Data = Record<string, unknown>
 type Existing = { id: string; section: Section; position: number; data: Data }
-export type ImportWriteRow = { section: Section; data: Data; action: "add" | "skip" | "merge" | "overwrite"; matchId: string | null }
+export type ImportWriteRow = {
+  section: Section
+  data: Data
+  action: "add" | "skip" | "merge" | "overwrite"
+  matchId: string | null
+  parent?: string
+}
 
 /**
  * Only the basics fields the user chose to set. Never an empty `links` array: the DB merges
@@ -39,12 +45,25 @@ function keepBulletIds(oldData: Data, newData: Data): Data {
  */
 export function buildImportWrites(existing: Existing[], rows: ImportWriteRow[]) {
   const byId = new Map(existing.map((e) => [e.id, e]))
-  const inserts: { section: Section; position: number; data: Data; tags: string[] }[] = []
+  const inserts: { id: string; section: Section; position: number; data: Data; tags: string[]; parent?: string }[] = []
   for (const s of SECTION_KEYS) {
     const adds = rows.filter((r) => r.section === s && r.action === "add")
     const taken = existing.filter((e) => e.section === s).map((e) => e.position)
-    positionsForNew(s, taken, adds.length).forEach((position, i) => inserts.push({ section: s, position, data: validData(s, adds[i].data), tags: [] }))
+    positionsForNew(s, taken, adds.length).forEach((position, i) =>
+      inserts.push({ id: crypto.randomUUID(), section: s, position, data: validData(s, adds[i].data), tags: [], parent: adds[i].parent }),
+    )
   }
+  // sub-projects -> the experience at the same company (prefer one imported now, else an existing one)
+  const experiences = [
+    ...inserts.filter((i) => i.section === "experience").map((i) => ({ id: i.id, company: i.data.company })),
+    ...existing.filter((e) => e.section === "experience").map((e) => ({ id: e.id, company: e.data.company })),
+  ]
+  for (const ins of inserts) {
+    if (ins.section !== "project" || !ins.parent) continue
+    const exp = experiences.find((e) => textKey(e.company) && textKey(e.company) === textKey(ins.parent))
+    if (exp) ins.data = { ...ins.data, experience_id: exp.id }
+  }
+  for (const ins of inserts) delete ins.parent
 
   const next = new Map<string, Data>()
   for (const r of rows) {

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { NativeSelect } from "@/components/ui/native-select"
+import { startNavigation } from "@/components/nav/top-progress"
 import { deleteApplication, moveApplication } from "@/lib/data/actions"
 import type { Application, CvVersion, PublicSettings, Stage, StageEvent } from "@/lib/data/types"
 import { formatDate } from "@/lib/format"
@@ -58,6 +59,7 @@ export function ApplicationDetail({ app, events, stages, cvs, settings }: Props)
         return
       }
       toast.success("Đã xoá đơn")
+      startNavigation()
       router.replace("/")
     })
   }

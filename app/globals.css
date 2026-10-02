@@ -130,3 +130,9 @@
     @apply font-sans;
   }
 }
+/* top progress bar: rushes to ~30%, then crawls toward 90% until the page arrives */
+@keyframes top-progress {
+  0% { width: 0%; }
+  10% { width: 30%; }
+  100% { width: 90%; }
+}

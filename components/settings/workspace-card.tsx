@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Crown, Loader2, LogOut, Trash2, UserPlus } from "lucide-react"
 import { toast } from "sonner"
+import { startNavigation } from "@/components/nav/top-progress"
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -131,6 +132,7 @@ export function WorkspaceCard({
           onClick={() => {
             if (confirm(`Rời workspace “${current.name}”?`))
               run(() => leaveWorkspace(), "Đã rời workspace", () => {
+                startNavigation()
                 router.push("/")
                 router.refresh()
               })

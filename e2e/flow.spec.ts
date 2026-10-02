@@ -241,3 +241,17 @@ test("a stale tab cannot write into a workspace switched in another tab", async 
   await expect(tab1.getByText(/không thuộc workspace đang chọn/)).toBeVisible()
   await ctx.close()
 })
+
+test("a progress bar shows while the next page loads", async ({ page }, info) => {
+  test.skip(info.project.name !== "laptop", "once is enough")
+  await login(page, info.project.name)
+  // slow down the RSC payload of the dashboard so the loading state is observable
+  await page.route(/\/dashboard(\?|$)/, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500))
+    await route.continue()
+  })
+  await page.getByRole("link", { name: "Dashboard" }).first().click()
+  await expect(page.getByRole("progressbar", { name: "Đang tải trang" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible()
+  await expect(page.getByRole("progressbar", { name: "Đang tải trang" })).toHaveCount(0)
+})

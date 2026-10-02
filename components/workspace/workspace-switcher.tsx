@@ -1,9 +1,10 @@
 "use client"
 
-import { useTransition } from "react"
+import { useEffect, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { NativeSelect } from "@/components/ui/native-select"
+import { finishNavigation, startNavigation } from "@/components/nav/top-progress"
 import { switchWorkspace } from "@/lib/data/actions"
 import type { WorkspaceLite } from "@/lib/workspace/pick"
 
@@ -18,6 +19,10 @@ export function WorkspaceSwitcher({
 }) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  // switching may stay on the same URL ("/"), so end the bar when the refresh settles
+  useEffect(() => {
+    if (!pending) finishNavigation()
+  }, [pending])
   if (workspaces.length < 2) return null
   return (
     <NativeSelect
@@ -27,6 +32,7 @@ export function WorkspaceSwitcher({
       disabled={pending}
       onChange={(e) => {
         const id = e.target.value
+        startNavigation()
         startTransition(async () => {
           const res = await switchWorkspace(id)
           if (!res.ok) return void toast.error(res.error)

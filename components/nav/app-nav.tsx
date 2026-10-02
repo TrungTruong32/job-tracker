@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { BarChart3, BriefcaseBusiness, FileText, LogOut, Moon, Settings, Sun } from "lucide-react"
+import { BarChart3, BriefcaseBusiness, FileText, LogOut, Moon, Settings, Sun, UserRound } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher"
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 export const NAV_ITEMS = [
   { href: "/", label: "Đơn ứng tuyển", short: "Đơn", icon: BriefcaseBusiness },
   { href: "/dashboard", label: "Dashboard", short: "Thống kê", icon: BarChart3 },
+  { href: "/profile", label: "Hồ sơ", short: "Hồ sơ", icon: UserRound },
   { href: "/cv", label: "CV", short: "CV", icon: FileText },
   { href: "/settings", label: "Cài đặt", short: "Cài đặt", icon: Settings },
 ] as const
@@ -106,7 +107,7 @@ export function BottomNav() {
   const pathname = usePathname()
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
         {NAV_ITEMS.map(({ href, short, icon: Icon }) => {
           const active = isActive(pathname, href)
           return (

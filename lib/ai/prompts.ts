@@ -73,3 +73,16 @@ Rules: copy bullet text verbatim (no rewriting, no invented facts); keep emphasi
     { role: "user", content: text },
   ]
 }
+
+/** Shorten CV bullets to about `ratio` of their length, keeping facts, numbers and markup. */
+export function buildShortenMessages(bullets: { id: string; text: string }[], ratio: number): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content: `You tighten CV bullet points so the CV fits on one page. Rewrite each bullet to about ${Math.round(ratio * 100)}% of its length.
+Keep every number, metric and named technology; keep **bold** / *italic* / [text](url) markup on the same facts; start with a strong verb; no new facts.
+Return ONLY JSON: {"bullets": [{"id": <same id>, "text": <shorter bullet>}]} with the same ids in the same order.`,
+    },
+    { role: "user", content: JSON.stringify({ bullets }) },
+  ]
+}

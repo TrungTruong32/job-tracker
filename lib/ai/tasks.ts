@@ -1,7 +1,7 @@
 import { z } from "zod"
 import type { ChatMessage } from "./client"
 import { CvFitSchema, JdSummarySchema } from "./parse"
-import { buildExtractMessages, buildMatchMessages, buildParseCvMessages, buildPingMessages } from "./prompts"
+import { buildExtractMessages, buildMatchMessages, buildParseCvMessages, buildPingMessages, buildShortenMessages } from "./prompts"
 
 /** The AI jobs the app runs; same definitions on the server and in the browser (Ollama). */
 export const AI_TASKS = {
@@ -23,6 +23,14 @@ export const AI_TASKS = {
     messages: (i: { cvText: string }): ChatMessage[] => buildParseCvMessages(i.cvText),
     // loose on purpose: lib/profile/normalize.ts validates each item and counts the rest as dropped
     output: z.object({ basics: z.record(z.string(), z.unknown()).optional(), items: z.array(z.unknown()) }),
+  },
+  shorten_bullets: {
+    input: z.object({
+      bullets: z.array(z.object({ id: z.string(), text: z.string().min(1) })).min(1).max(20),
+      ratio: z.number().min(0.3).max(0.95),
+    }),
+    messages: (i: { bullets: { id: string; text: string }[]; ratio: number }): ChatMessage[] => buildShortenMessages(i.bullets, i.ratio),
+    output: z.object({ bullets: z.array(z.object({ id: z.string(), text: z.string() })) }),
   },
   ping: {
     input: z.object({}),

@@ -50,3 +50,7 @@ test-results/
 playwright-report/
 .dev.log
 .build.log
+
+.vercel
+.env*
+.deploy.log

@@ -86,6 +86,44 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"profile_items": {
+                  Row: {
+                    "created_at": string,"data": NonNullable<Json>,"id": string,"position": number,"section": string,"tags": (string)[],"updated_at": string,"workspace_id": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"data": NonNullable<Json>,"id"?: string,"position"?: number,"section": string,"tags"?: (string)[],"updated_at"?: string,"workspace_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"data"?: NonNullable<Json>,"id"?: string,"position"?: number,"section"?: string,"tags"?: (string)[],"updated_at"?: string,"workspace_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "profile_items_workspace_id_fkey"
+      columns: ["workspace_id"]
+isOneToOne: false
+      referencedRelation: "workspaces"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"profiles": {
+                  Row: {
+                    "basics": NonNullable<Json>,"created_at": string,"updated_at": string,"workspace_id": string
+                  }
+                  Insert: {
+                    "basics"?: NonNullable<Json>,"created_at"?: string,"updated_at"?: string,"workspace_id": string
+                  }
+                  Update: {
+                    "basics"?: NonNullable<Json>,"created_at"?: string,"updated_at"?: string,"workspace_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "profiles_workspace_id_fkey"
+      columns: ["workspace_id"]
+isOneToOne: true
+      referencedRelation: "workspaces"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"settings": {
                   Row: {
                     "ai_chain": NonNullable<Json>,"ai_connections": NonNullable<Json>,"ai_timeout_s": number,"created_at": string,"stale_days": number,"updated_at": string,"workspace_id": string
@@ -201,6 +239,9 @@ isOneToOne: false
                            },
 "has_workspace_access":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"import_profile":
+{ Args: { "p_basics": Json,"p_inserts": Json,"p_updates": Json,"p_ws": string }; Returns: undefined
                            },
 "invite_member":
 { Args: { "p_email": string,"p_ws": string }; Returns: undefined

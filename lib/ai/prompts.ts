@@ -45,3 +45,31 @@ Chấm khách quan, dựa trên bằng chứng trong CV.`,
 export function buildPingMessages(): ChatMessage[] {
   return [{ role: "user", content: 'Trả về đúng JSON: {"ok": true}' }]
 }
+
+const CV_MAX_CHARS = 15_000
+
+export function buildParseCvMessages(cvText: string): ChatMessage[] {
+  const text = cvText.length > CV_MAX_CHARS ? cvText.slice(0, CV_MAX_CHARS) + "\n…(truncated)" : cvText
+  return [
+    {
+      role: "system",
+      content: `You convert a CV/resume into structured JSON. Return ONLY one JSON object:
+{
+  "basics": { "full_name", "headline", "email", "phone", "location", "summary": string|null, "links": [{"label","url"}] },
+  "items": [ { "section": <section>, "data": <fields for that section> } ]
+}
+Sections and their data fields (dates as "MMM YYYY" or "YYYY", end may be "Present"):
+- "experience": company, title, location, start, end, bullets: string[], tech: string[]
+- "education": school, degree, field, start, end, gpa, bullets: string[]
+- "project": name, role, url, start, end, bullets: string[], tech: string[]
+- "publication": title, venue, authors, date, url
+- "skill": category, items: string[]   (one item per skill group as written in the CV)
+- "certification": name, issuer, date, url
+- "award": title, issuer, date, description
+- "language": name, level
+- "custom": section_title, title, subtitle, date, bullets: string[]   (anything else, e.g. activities)
+Rules: copy bullet text verbatim (no rewriting, no invented facts); keep the CV's original order; omit fields that are absent.`,
+    },
+    { role: "user", content: text },
+  ]
+}

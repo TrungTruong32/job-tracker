@@ -1,5 +1,5 @@
 import type { JdSummary, StoredCvFit } from "@/lib/ai/parse"
-import type { AiProvider } from "@/lib/ai/providers"
+import type { PublicConnection, PublicEntry } from "@/lib/ai/settings"
 import type { StageKind } from "@/lib/domain"
 import type { Database } from "@/lib/supabase/types"
 
@@ -13,14 +13,12 @@ export type Application = Omit<Row<"applications">, "ai_summary" | "ai_fit" | "s
   ai_fit: StoredCvFit | null
 }
 
-/** Settings as the browser may see them: never the encrypted key. */
+/** Settings as the browser may see them: never a key, only masks. */
 export type PublicSettings = {
-  ai_provider: AiProvider
-  ai_base_url: string | null
-  ai_model: string | null
-  ai_key_mask: string | null
-  stale_days: number
+  connections: PublicConnection[]
+  chain: PublicEntry[]
   ai_ready: boolean
+  stale_days: number
 }
 
 export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string }

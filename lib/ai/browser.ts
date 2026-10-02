@@ -1,65 +1,108 @@
 "use client"
 
 import type { PublicSettings } from "@/lib/data/types"
-import { AiError, chatJson } from "./client"
-import { CvFitSchema, JdSummarySchema, type CvFit, type JdSummary } from "./parse"
-import { buildExtractMessages, buildMatchMessages, buildPingMessages } from "./prompts"
-import { isBrowserProvider } from "./providers"
-import { z } from "zod"
+import { AiError, chatJson, type AiErrorKind } from "./client"
+import { runChain, type ChainResult } from "./chain"
+import type { ModelInfo } from "./models"
+import { normalizeModels } from "./models"
+import { isBrowserProvider, type AiProvider } from "./providers"
+import { AI_TASKS, type AiTask, type AiTaskInput, type AiTaskOutput } from "./tasks"
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   let res: Response
   try {
     res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
   } catch {
-    throw new AiError("Mất kết nối tới server")
+    throw new AiError("Mất kết nối tới server", "network")
   }
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new AiError((data as { error?: string }).error ?? `Lỗi ${res.status}`)
+  const data = (await res.json().catch(() => ({}))) as { error?: string; kind?: AiErrorKind }
+  if (!res.ok) throw new AiError(data.error ?? `Lỗi ${res.status}`, data.kind ?? "unknown")
   return data as T
 }
 
-function ollamaConfig(s: PublicSettings) {
-  if (!s.ai_base_url || !s.ai_model) throw new AiError("Chưa cấu hình Base URL / model cho Ollama trong Cài đặt")
-  return { baseUrl: s.ai_base_url, model: s.ai_model, apiKey: null }
-}
-
-function wrapOllama(e: unknown): never {
-  if (e instanceof AiError && e.message.startsWith("Không kết nối")) {
-    throw new AiError(
-      "Không gọi được Ollama trên máy này. Kiểm tra Ollama đang chạy và OLLAMA_ORIGINS cho phép domain của app.",
-    )
+function ollamaHint(e: unknown): never {
+  if (e instanceof AiError && e.kind === "network") {
+    throw new AiError("Không gọi được Ollama trên máy này. Kiểm tra Ollama đang chạy và OLLAMA_ORIGINS cho phép domain của app.", "network")
   }
   throw e
 }
 
-/** Hosted providers go through our server (key stays there); Ollama is called from the browser. */
-export async function aiExtractJd(settings: PublicSettings, jdText: string): Promise<JdSummary> {
-  if (isBrowserProvider(settings.ai_provider)) {
-    return chatJson(ollamaConfig(settings), buildExtractMessages(jdText), JdSummarySchema).catch(wrapOllama)
-  }
-  return postJson("/api/ai/extract", { jdText })
+/**
+ * Run an AI task along the workspace's model chain, falling back on failure.
+ * Hosted models run on the server (keys stay there); Ollama runs from this browser.
+ */
+export async function runAiTask<T extends AiTask>(
+  settings: PublicSettings,
+  task: T,
+  input: AiTaskInput<T>,
+): Promise<ChainResult<AiTaskOutput<T>>> {
+  const def = AI_TASKS[task]
+  const valid = def.input.safeParse(input)
+  if (!valid.success) throw new AiError(valid.error.issues[0].message, "input")
+
+  const entries = settings.chain.map((e) => ({ connectionId: e.connection_id, model: e.model }))
+  return runChain(entries, async (entry, index) => {
+    const conn = settings.connections.find((c) => c.id === entry.connectionId)
+    if (conn && isBrowserProvider(conn.provider)) {
+      const messages = (def.messages as (i: unknown) => ReturnType<typeof def.messages>)(valid.data)
+      return chatJson({ baseUrl: conn.base_url, apiKey: null, model: entry.model }, messages, def.output as never, {
+        timeoutMs: def.timeoutMs,
+      }).catch(ollamaHint) as Promise<AiTaskOutput<T>>
+    }
+    const r = await postJson<{ data: AiTaskOutput<T> }>("/api/ai/run", { task, index, input: valid.data })
+    return r.data
+  })
 }
 
-export async function aiMatchCv(settings: PublicSettings, jdText: string, cvText: string): Promise<CvFit> {
-  if (isBrowserProvider(settings.ai_provider)) {
-    return chatJson(ollamaConfig(settings), buildMatchMessages(jdText, cvText), CvFitSchema).catch(wrapOllama)
-  }
-  return postJson("/api/ai/match", { jdText, cvText })
+/** Human summary of a chain result for toasts ("đã dùng dự phòng #2 …"). */
+export function describeChainResult(r: ChainResult<unknown>): string | undefined {
+  if (!r.failures.length) return undefined
+  return `Model #${r.failures[0].index + 1} lỗi (${r.failures[0].message}) — đã dùng dự phòng #${r.index + 1}: ${r.model}`
 }
 
-export async function aiTestConnection(input: {
-  provider: PublicSettings["ai_provider"]
-  baseUrl: string
-  model: string
-  apiKey?: string
-}): Promise<{ ms: number }> {
-  if (isBrowserProvider(input.provider)) {
+/** List models of a (possibly unsaved) connection. */
+export async function loadModels(conn: {
+  id: string
+  provider: AiProvider
+  base_url: string
+  api_key?: string
+}): Promise<ModelInfo[]> {
+  if (isBrowserProvider(conn.provider)) {
+    let res: Response
+    try {
+      res = await fetch(`${conn.base_url.replace(/\/+$/, "")}/models`)
+    } catch {
+      return ollamaHint(new AiError("network", "network"))
+    }
+    if (!res.ok) throw new AiError(`Ollama trả lỗi ${res.status}`, "server")
+    return normalizeModels(conn.provider, await res.json())
+  }
+  const r = await postJson<{ models: ModelInfo[] }>("/api/ai/models", {
+    provider: conn.provider,
+    baseUrl: conn.base_url,
+    connectionId: conn.id,
+    apiKey: conn.api_key || undefined,
+  })
+  return r.models
+}
+
+/** Ping one model on a (possibly unsaved) connection; resolves to latency in ms. */
+export async function testModel(
+  conn: { id: string; provider: AiProvider; base_url: string; api_key?: string },
+  model: string,
+): Promise<number> {
+  if (isBrowserProvider(conn.provider)) {
     const started = performance.now()
-    await chatJson({ baseUrl: input.baseUrl, model: input.model, apiKey: null }, buildPingMessages(), z.object({ ok: z.unknown() }), {
-      timeoutMs: 20_000,
-    }).catch(wrapOllama)
-    return { ms: Math.round(performance.now() - started) }
+    await chatJson({ baseUrl: conn.base_url, apiKey: null, model }, AI_TASKS.ping.messages(), AI_TASKS.ping.output, {
+      timeoutMs: AI_TASKS.ping.timeoutMs,
+    }).catch(ollamaHint)
+    return Math.round(performance.now() - started)
   }
-  return postJson("/api/ai/test", { baseUrl: input.baseUrl, model: input.model, apiKey: input.apiKey || undefined })
+  const r = await postJson<{ ms: number }>("/api/ai/test", {
+    baseUrl: conn.base_url,
+    model,
+    connectionId: conn.id,
+    apiKey: conn.api_key || undefined,
+  })
+  return r.ms
 }

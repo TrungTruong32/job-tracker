@@ -18,29 +18,66 @@ test("add an application with AI prefill, move it, see it in timeline and dashbo
   const isPhone = info.project.name === "phone"
   await login(page, info.project.name)
 
-  // Configure AI with a dummy key; the AI endpoints are mocked below.
-  await page.goto("/settings")
-  await page.getByLabel("Model").fill("test/model:free")
-  await page.getByLabel("API key").fill("sk-test-123456")
-  await page.getByRole("button", { name: "Lưu cài đặt" }).click()
-  await expect(page.getByText("Đã lưu cài đặt")).toBeVisible()
-  await page.reload()
-  await expect(page.getByLabel("API key")).toHaveAttribute("placeholder", /••••3456/)
-
-  await page.route("**/api/ai/extract", (route) =>
+  // Configure AI: one connection, load its models, build a 2-model chain, test, save.
+  // Provider endpoints are mocked; only our own API routes are intercepted.
+  await page.route("**/api/ai/models", (route) =>
     route.fulfill({
       json: {
-        company: "ABC AI",
-        position: "AI Engineer",
-        salary: "2000-3000 USD",
-        location: "Hà Nội",
-        seniority: "Senior",
-        required_skills: ["Python", "LangChain", "RAG"],
-        nice_to_have: [],
-        summary: "Xây dựng sản phẩm LLM.",
+        models: [
+          { id: "a/model:free", name: "Model A", free: true, context: 8000 },
+          { id: "c/model:free", name: "Model C", free: true, context: 8000 },
+          { id: "b/paid", name: "Paid B", free: false, context: 128000 },
+        ],
       },
     }),
   )
+  await page.route("**/api/ai/test", async (route) => {
+    const { model } = route.request().postDataJSON()
+    return model === "a/model:free"
+      ? route.fulfill({ json: { ms: 800 } })
+      : route.fulfill({ status: 502, json: { error: "Hết quota", kind: "quota" } })
+  })
+  await page.goto("/settings")
+  await page.getByRole("button", { name: "Thêm kết nối" }).click()
+  const conn = page.getByTestId("connection-0")
+  await conn.getByLabel("API key").fill("sk-test-123456")
+  await conn.getByRole("button", { name: "Tải danh sách model" }).click()
+  const picker = conn.getByTestId("model-picker")
+  await expect(picker.getByText("a/model:free")).toBeVisible()
+  await expect(picker.getByText("b/paid")).toHaveCount(0) // free-only filter on by default
+  await picker.getByRole("button", { name: "Thêm a/model:free vào chuỗi" }).click()
+  await picker.getByRole("button", { name: "Thêm c/model:free vào chuỗi" }).click()
+  const chainList = page.getByTestId("model-chain")
+  await expect(chainList.getByRole("listitem")).toHaveCount(2)
+  await page.getByRole("button", { name: "Test tất cả" }).click()
+  await expect(chainList.getByRole("listitem").nth(0).getByText("0.8s")).toBeVisible()
+  await expect(chainList.getByRole("listitem").nth(1).getByText("Hết quota")).toBeVisible()
+  await page.getByRole("button", { name: "Lưu cài đặt" }).click()
+  await expect(page.getByText("Đã lưu cài đặt")).toBeVisible()
+  await page.reload()
+  await expect(page.getByTestId("connection-0").getByLabel("API key")).toHaveAttribute("placeholder", /••••3456/)
+  await expect(page.getByTestId("model-chain").getByRole("listitem")).toHaveCount(2)
+
+  // Model #1 is out of quota -> the app falls back to #2
+  await page.route("**/api/ai/run", async (route) => {
+    const { task, index } = route.request().postDataJSON()
+    if (task !== "extract") return route.fallback()
+    if (index === 0) return route.fulfill({ status: 502, json: { error: "Hết quota", kind: "quota" } })
+    return route.fulfill({
+      json: {
+        data: {
+          company: "ABC AI",
+          position: "AI Engineer",
+          salary: "2000-3000 USD",
+          location: "Hà Nội",
+          seniority: "Senior",
+          required_skills: ["Python", "LangChain", "RAG"],
+          nice_to_have: [],
+          summary: "Xây dựng sản phẩm LLM.",
+        },
+      },
+    })
+  })
 
   // Add application
   await page.goto("/")
@@ -51,6 +88,7 @@ test("add an application with AI prefill, move it, see it in timeline and dashbo
   await expect(dialog.getByLabel("Công ty *")).toHaveValue("ABC AI")
   await expect(dialog.getByLabel("Vị trí *")).toHaveValue("AI Engineer")
   await expect(dialog.getByLabel("Lương")).toHaveValue("2000-3000 USD")
+  await expect(page.getByText(/đã dùng dự phòng #2: c\/model:free/)).toBeVisible()
   await dialog.getByLabel("Nguồn").fill("LinkedIn")
   await dialog.getByRole("button", { name: "Thêm đơn" }).click()
   await expect(page.getByText("Đã thêm đơn ứng tuyển")).toBeVisible()
@@ -101,7 +139,7 @@ test("table view search is accent-insensitive", async ({ page }, info) => {
 })
 
 test("unauthenticated API calls are rejected", async ({ request }) => {
-  const res = await request.post("/api/ai/extract", { data: { jdText: JD } })
+  const res = await request.post("/api/ai/run", { data: { task: "extract", index: 0, input: { jdText: JD } } })
   expect(res.status()).toBe(401)
 })
 
@@ -145,10 +183,12 @@ test("drag a card to another column (laptop)", async ({ page }, info) => {
 test("score the application against the CV", async ({ page }, info) => {
   await login(page, info.project.name)
   let sent: { jdText: string; cvText: string } | null = null
-  await page.route("**/api/ai/match", async (route) => {
-    sent = route.request().postDataJSON()
+  await page.route("**/api/ai/run", async (route) => {
+    const body = route.request().postDataJSON()
+    if (body.task !== "match") return route.fallback()
+    sent = body.input
     await route.fulfill({
-      json: { score: "82", matched_skills: ["Python", "RAG"], missing_skills: ["Kubernetes"], suggestions: ["Nhấn mạnh dự án RAG"] },
+      json: { data: { score: 82, matched_skills: ["Python", "RAG"], missing_skills: ["Kubernetes"], suggestions: ["Nhấn mạnh dự án RAG"] } },
     })
   })
   const href = await page.locator('a[href^="/applications/"]').first().getAttribute("href")

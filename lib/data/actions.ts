@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { CvFitSchema, JdSummarySchema, type StoredCvFit } from "@/lib/ai/parse"
-import { nextKeyAction } from "@/lib/ai/key-policy"
+import { AiUpdateSchema, applyAiUpdate } from "@/lib/ai/settings"
 import { encryptSecret } from "@/lib/crypto"
 import { todayStr } from "@/lib/format"
 import { cookies } from "next/headers"
 import { WS_COOKIE, getCurrentWorkspace, getWorkspaces, workspaceContext } from "./queries"
-import type { Database, Json } from "@/lib/supabase/types"
+import type { Json } from "@/lib/supabase/types"
 import type { ActionResult, ApplicationInput, EventInput } from "./types"
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày không hợp lệ")
@@ -332,41 +332,30 @@ export async function deleteCv(id: string): Promise<ActionResult> {
 // ---------- settings ----------
 
 const SettingsSchema = z.object({
-  ai_provider: z.enum(["openrouter", "gemini", "ollama", "custom"]),
-  ai_base_url: optText,
-  ai_model: optText,
-  ai_api_key: z.string().optional(), // undefined = keep, "" = remove, else replace
+  ai: AiUpdateSchema,
   stale_days: z.coerce.number().int().min(1, "Tối thiểu 1 ngày").max(90, "Tối đa 90 ngày"),
 })
 
 export async function saveSettings(input: z.input<typeof SettingsSchema>): Promise<ActionResult> {
   try {
     const v = SettingsSchema.parse(input)
-    if (v.ai_base_url && !/^https?:\/\//.test(v.ai_base_url)) throw new Error("Base URL phải bắt đầu bằng http:// hoặc https://")
     const { supabase, ws } = await workspaceContext()
     if (ws.role !== "owner") throw new Error("Chỉ chủ workspace được đổi cài đặt")
-    const patch: Database["public"]["Tables"]["settings"]["Update"] = {
-      ai_provider: v.ai_provider,
-      ai_base_url: v.ai_base_url,
-      ai_model: v.ai_model,
-      stale_days: v.stale_days,
-    }
-    const { data: stored } = await supabase
+    const { data: stored, error: readErr } = await supabase
       .from("settings")
-      .select("ai_base_url, ai_api_key_encrypted")
+      .select("ai_connections, ai_chain")
       .eq("workspace_id", ws.id)
       .maybeSingle()
-    const action = nextKeyAction(
-      { ai_base_url: stored?.ai_base_url ?? null, has_key: !!stored?.ai_api_key_encrypted },
-      { baseUrl: v.ai_base_url, apiKey: v.ai_api_key },
-    )
-    if (action === "replace") {
-      if (!process.env.AI_KEY_SECRET) throw new Error("Server chưa cấu hình AI_KEY_SECRET")
-      patch.ai_api_key_encrypted = encryptSecret(v.ai_api_key!.trim(), process.env.AI_KEY_SECRET)
-    } else if (action === "remove") {
-      patch.ai_api_key_encrypted = null
-    }
-    const { error } = await supabase.from("settings").update(patch).eq("workspace_id", ws.id)
+    if (readErr) throw readErr
+    const secret = process.env.AI_KEY_SECRET
+    const ai = applyAiUpdate(stored, v.ai, (plain) => {
+      if (!secret) throw new Error("Server chưa cấu hình AI_KEY_SECRET")
+      return encryptSecret(plain, secret)
+    })
+    const { error } = await supabase
+      .from("settings")
+      .update({ ai_connections: ai.ai_connections as NonNullable<Json>, ai_chain: ai.ai_chain as NonNullable<Json>, stale_days: v.stale_days })
+      .eq("workspace_id", ws.id)
     if (error) throw error
     refresh("/settings")
     return { ok: true, data: undefined }

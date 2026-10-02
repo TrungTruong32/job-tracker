@@ -28,7 +28,7 @@ export default async function SettingsPage() {
         <SettingsForm key={ws.id} settings={settings} />
       ) : (
         <section className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-          AI: {settings.ai_ready ? `đã được chủ workspace cấu hình (${settings.ai_model})` : "chủ workspace chưa cấu hình"}. Follow-up sau{" "}
+          AI: {settings.ai_ready ? `chủ workspace đã cấu hình ${settings.chain.length} model (${settings.chain.map((c) => c.model).join(" → ")})` : "chủ workspace chưa cấu hình"}. Follow-up sau{" "}
           {settings.stale_days} ngày.
         </section>
       )}

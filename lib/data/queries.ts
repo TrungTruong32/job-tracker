@@ -1,9 +1,7 @@
 import "server-only"
 import { cache } from "react"
 import { cookies } from "next/headers"
-import { resolveAiConfig } from "@/lib/ai/config"
-import type { AiProvider } from "@/lib/ai/providers"
-import { decryptSecret, maskKey } from "@/lib/crypto"
+import { publicAi } from "@/lib/ai/settings"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireUser } from "@/lib/supabase/server"
 import { pickWorkspace, type WorkspaceLite, type WorkspaceRole } from "@/lib/workspace/pick"
@@ -136,26 +134,6 @@ export const getSettingsRow = cache(async () => {
 
 export async function getPublicSettings(): Promise<PublicSettings> {
   const row = await getSettingsRow()
-  let mask: string | null = null
-  if (row?.ai_api_key_encrypted && process.env.AI_KEY_SECRET) {
-    try {
-      mask = maskKey(decryptSecret(row.ai_api_key_encrypted, process.env.AI_KEY_SECRET))
-    } catch {
-      mask = null
-    }
-  }
-  const provider = (row?.ai_provider ?? "openrouter") as AiProvider
-  return {
-    ai_provider: provider,
-    ai_base_url: row?.ai_base_url ?? null,
-    ai_model: row?.ai_model ?? null,
-    ai_key_mask: mask,
-    stale_days: row?.stale_days ?? 7,
-    ai_ready: !!resolveAiConfig(row, process.env.AI_KEY_SECRET),
-  }
-}
-
-/** Server-side AI config (decrypted key) — never send this to the client. */
-export async function getServerAiConfig() {
-  return resolveAiConfig(await getSettingsRow(), process.env.AI_KEY_SECRET)
+  const ai = publicAi(row, process.env.AI_KEY_SECRET)
+  return { connections: ai.connections, chain: ai.chain, ai_ready: ai.ready, stale_days: row?.stale_days ?? 7 }
 }

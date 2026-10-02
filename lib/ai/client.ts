@@ -4,8 +4,14 @@ import { AiParseError, parseWith } from "./parse"
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string }
 export type AiConfig = { baseUrl: string; apiKey: string | null; model: string }
 
+/** input = bad request (stop); auth = wrong key (skip this connection); others may work on another model. */
+export type AiErrorKind = "input" | "auth" | "quota" | "not_found" | "server" | "timeout" | "network" | "parse" | "unknown"
+
 export class AiError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    public kind: AiErrorKind = "unknown",
+  ) {
     super(message)
     this.name = "AiError"
   }
@@ -17,9 +23,10 @@ const RETRY_REMINDER: ChatMessage = {
 }
 
 function httpError(status: number, body: string): AiError {
-  if (status === 401 || status === 403) return new AiError("API key không hợp lệ hoặc không có quyền dùng model này")
-  if (status === 429) return new AiError("Hết quota / vượt giới hạn gọi API, thử lại sau hoặc đổi model")
-  if (status === 404) return new AiError("Không tìm thấy model hoặc Base URL sai")
+  if (status === 401 || status === 403) return new AiError("API key không hợp lệ hoặc không có quyền dùng model này", "auth")
+  if (status === 429) return new AiError("Hết quota / vượt giới hạn gọi API, thử lại sau hoặc đổi model", "quota")
+  if (status === 404) return new AiError("Không tìm thấy model hoặc Base URL sai", "not_found")
+  if (status >= 500) return new AiError(`Nhà cung cấp AI đang lỗi (${status})`, "server")
   return new AiError(`Nhà cung cấp AI báo lỗi ${status}: ${body.slice(0, 200)}`)
 }
 
@@ -48,9 +55,9 @@ async function complete(
   } catch (e) {
     if (e instanceof AiError || e instanceof AiParseError) throw e
     if (e instanceof Error && e.name === "AbortError") {
-      throw new AiError(`Quá thời gian chờ ${Math.round(timeoutMs / 1000)}s, thử lại hoặc đổi model nhanh hơn`)
+      throw new AiError(`Quá thời gian chờ ${Math.round(timeoutMs / 1000)}s, thử lại hoặc đổi model nhanh hơn`, "timeout")
     }
-    throw new AiError(`Không kết nối được tới nhà cung cấp AI: ${e instanceof Error ? e.message : String(e)}`)
+    throw new AiError(`Không kết nối được tới nhà cung cấp AI: ${e instanceof Error ? e.message : String(e)}`, "network")
   } finally {
     clearTimeout(timer)
   }
@@ -83,6 +90,6 @@ export async function chatJson<T>(
   try {
     return parseWith(schema, second)
   } catch {
-    throw new AiError("AI trả về dữ liệu không đúng định dạng JSON (đã thử lại 1 lần). Thử model khác.")
+    throw new AiError("AI trả về dữ liệu không đúng định dạng JSON (đã thử lại 1 lần). Thử model khác.", "parse")
   }
 }

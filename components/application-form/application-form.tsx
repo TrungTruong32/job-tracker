@@ -9,8 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
-import { aiExtractJd } from "@/lib/ai/browser"
-import type { JdSummary } from "@/lib/ai/parse"
+import { describeChainResult, runAiTask } from "@/lib/ai/browser"
 import { createApplication, updateApplication } from "@/lib/data/actions"
 import type { Application, ApplicationInput, CvVersion, PublicSettings, Stage } from "@/lib/data/types"
 import { todayStr } from "@/lib/format"
@@ -55,7 +54,7 @@ export function ApplicationForm({ stages, cvs, settings, application, onDone }: 
   const str = (k: keyof ApplicationInput) => (v[k] as string | null) ?? ""
 
   async function runAi() {
-    if (!settings.ai_ready && settings.ai_provider !== "ollama") {
+    if (!settings.ai_ready) {
       toast.error("Chưa cấu hình AI", { description: "Vào Cài đặt để chọn nhà cung cấp và nhập API key.", action: { label: "Mở Cài đặt", onClick: () => router.push("/settings") } })
       return
     }
@@ -66,7 +65,8 @@ export function ApplicationForm({ stages, cvs, settings, application, onDone }: 
     }
     setAiLoading(true)
     try {
-      const s: JdSummary = await aiExtractJd(settings, jd)
+      const r = await runAiTask(settings, "extract", { jdText: jd })
+      const s = r.data
       setV((p) => ({
         ...p,
         company: p.company || s.company || "",
@@ -75,7 +75,7 @@ export function ApplicationForm({ stages, cvs, settings, application, onDone }: 
         location: p.location || s.location,
         ai_summary: s,
       }))
-      toast.success("AI đã điền thông tin", { description: "Kiểm tra lại trước khi lưu." })
+      toast.success("AI đã điền thông tin", { description: describeChainResult(r) ?? "Kiểm tra lại trước khi lưu." })
     } catch (e) {
       toast.error("AI không xử lý được", { description: e instanceof Error ? e.message : String(e) })
     } finally {

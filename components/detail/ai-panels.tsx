@@ -6,7 +6,7 @@ import { AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { aiExtractJd, aiMatchCv } from "@/lib/ai/browser"
+import { describeChainResult, runAiTask } from "@/lib/ai/browser"
 import { saveAiFit, saveAiSummary } from "@/lib/data/actions"
 import type { Application, CvVersion, PublicSettings } from "@/lib/data/types"
 import { formatDate } from "@/lib/format"
@@ -37,7 +37,7 @@ function Chips({ items, tone }: { items: string[]; tone?: "good" | "bad" }) {
 
 export function AiPanels({ app, cvs, settings }: { app: Application; cvs: CvVersion[]; settings: PublicSettings }) {
   const [loading, setLoading] = useState<"summary" | "fit" | null>(null)
-  const aiUsable = settings.ai_ready || settings.ai_provider === "ollama"
+  const aiUsable = settings.ai_ready
   const cv = cvs.find((c) => c.id === app.cv_version_id) ?? cvs.find((c) => c.is_default)
   const jd = app.jd_text?.trim() ?? ""
   const s = app.ai_summary
@@ -47,9 +47,10 @@ export function AiPanels({ app, cvs, settings }: { app: Application; cvs: CvVers
   async function summarize() {
     setLoading("summary")
     try {
-      const res = await saveAiSummary(app.id, await aiExtractJd(settings, jd))
+      const r = await runAiTask(settings, "extract", { jdText: jd })
+      const res = await saveAiSummary(app.id, r.data)
       if (!res.ok) throw new Error(res.error)
-      toast.success("Đã tóm tắt JD")
+      toast.success("Đã tóm tắt JD", { description: describeChainResult(r) })
     } catch (e) {
       toast.error("AI không tóm tắt được", { description: e instanceof Error ? e.message : String(e) })
     } finally {
@@ -61,9 +62,10 @@ export function AiPanels({ app, cvs, settings }: { app: Application; cvs: CvVers
     if (!cv) return
     setLoading("fit")
     try {
-      const res = await saveAiFit(app.id, await aiMatchCv(settings, jd, cv.extracted_text), cv.id)
+      const r = await runAiTask(settings, "match", { jdText: jd, cvText: cv.extracted_text })
+      const res = await saveAiFit(app.id, r.data, cv.id)
       if (!res.ok) throw new Error(res.error)
-      toast.success(`Điểm phù hợp: ${res.data.score}%`)
+      toast.success(`Điểm phù hợp: ${res.data.score}%`, { description: describeChainResult(r) })
     } catch (e) {
       toast.error("AI không chấm được", { description: e instanceof Error ? e.message : String(e) })
     } finally {

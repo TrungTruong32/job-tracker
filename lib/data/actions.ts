@@ -7,7 +7,7 @@ import { nextKeyAction } from "@/lib/ai/key-policy"
 import { encryptSecret } from "@/lib/crypto"
 import { todayStr } from "@/lib/format"
 import { cookies } from "next/headers"
-import { WS_COOKIE, getWorkspaces, workspaceContext } from "./queries"
+import { WS_COOKIE, getCurrentWorkspace, getWorkspaces, workspaceContext } from "./queries"
 import type { Database, Json } from "@/lib/supabase/types"
 import type { ActionResult, ApplicationInput, EventInput } from "./types"
 
@@ -43,10 +43,27 @@ const EventSchema = z.object({
 function fail(e: unknown): { ok: false; error: string } {
   if (e instanceof z.ZodError) return { ok: false, error: e.issues[0]?.message ?? "Dữ liệu không hợp lệ" }
   const code = (e as { code?: string })?.code
-  if (code === "23503") return { ok: false, error: "Không thể xoá vì đang được đơn ứng tuyển sử dụng" }
+  if (code === "23503")
+    return { ok: false, error: "Dữ liệu đang được dùng ở nơi khác hoặc đã thay đổi (có thể bạn vừa đổi workspace ở tab khác). Tải lại trang rồi thử lại." }
+  if (code === "42501") return { ok: false, error: "Bạn không có quyền làm việc này" }
   if (code === "23505") return { ok: false, error: "Dữ liệu bị trùng" }
   const msg = (e as { message?: string })?.message
   return { ok: false, error: msg || "Có lỗi xảy ra" }
+}
+
+/** The page was rendered for another workspace (switched in another tab) or the row is gone. */
+class StaleError extends Error {
+  constructor() {
+    super("Dữ liệu không thuộc workspace đang chọn (có thể bạn vừa đổi workspace ở tab khác). Tải lại trang.")
+  }
+}
+
+async function assertInWorkspace(table: "applications" | "stages" | "cv_versions", id: string) {
+  uuid.parse(id)
+  const { supabase, ws } = await workspaceContext()
+  const { data, error } = await supabase.from(table).select("id").eq("workspace_id", ws.id).eq("id", id).maybeSingle()
+  if (error) throw error
+  if (!data) throw new StaleError()
 }
 
 function refresh(...paths: string[]) {
@@ -59,6 +76,8 @@ export async function createApplication(input: ApplicationInput): Promise<Action
   try {
     const v = ApplicationSchema.parse(input)
     const { supabase, ws } = await workspaceContext()
+    await assertInWorkspace("stages", v.stage_id)
+    if (v.cv_version_id) await assertInWorkspace("cv_versions", v.cv_version_id)
     const { data, error } = await supabase
       .from("applications")
       .insert({ ...v, workspace_id: ws.id, ai_summary: v.ai_summary as Json })
@@ -79,13 +98,22 @@ export async function createApplication(input: ApplicationInput): Promise<Action
 export async function updateApplication(id: string, input: ApplicationInput): Promise<ActionResult> {
   try {
     const v = ApplicationSchema.parse(input)
-    const { supabase } = await workspaceContext()
-    const { data: current, error: curErr } = await supabase.from("applications").select("stage_id").eq("id", id).single()
+    const { supabase, ws } = await workspaceContext()
+    await assertInWorkspace("stages", v.stage_id)
+    if (v.cv_version_id) await assertInWorkspace("cv_versions", v.cv_version_id)
+    const { data: current, error: curErr } = await supabase
+      .from("applications")
+      .select("stage_id")
+      .eq("workspace_id", ws.id)
+      .eq("id", id)
+      .maybeSingle()
     if (curErr) throw curErr
+    if (!current) throw new StaleError()
     const { stage_id, ...rest } = v
     const { error } = await supabase
       .from("applications")
       .update({ ...rest, ai_summary: rest.ai_summary as Json })
+      .eq("workspace_id", ws.id)
       .eq("id", id)
     if (error) throw error
     // Stage changes always go through move_application so the timeline stays complete.
@@ -104,6 +132,7 @@ export async function deleteApplication(id: string): Promise<ActionResult> {
   try {
     uuid.parse(id)
     const { supabase } = await workspaceContext()
+    await assertInWorkspace("applications", id)
     const { error } = await supabase.from("applications").delete().eq("id", id)
     if (error) throw error
     refresh()
@@ -118,6 +147,8 @@ export async function moveApplication(id: string, stageId: string): Promise<Acti
     uuid.parse(id)
     uuid.parse(stageId)
     const { supabase } = await workspaceContext()
+    await assertInWorkspace("applications", id)
+    await assertInWorkspace("stages", stageId)
     const { error } = await supabase.rpc("move_application", { p_app: id, p_stage: stageId, p_date: todayStr() })
     if (error) throw error
     refresh(`/applications/${id}`)
@@ -131,7 +162,11 @@ export async function saveAiSummary(id: string, summary: unknown): Promise<Actio
   try {
     const v = JdSummarySchema.parse(summary)
     const { supabase } = await workspaceContext()
-    const { error } = await supabase.from("applications").update({ ai_summary: v as Json }).eq("id", id)
+    const { error } = await supabase
+      .from("applications")
+      .update({ ai_summary: v as Json })
+      .eq("workspace_id", (await getCurrentWorkspace()).id)
+      .eq("id", id)
     if (error) throw error
     refresh(`/applications/${id}`)
     return { ok: true, data: undefined }
@@ -148,7 +183,11 @@ export async function saveAiFit(id: string, fit: unknown, cvVersionId: string | 
       evaluated_at: new Date().toISOString(),
     }
     const { supabase } = await workspaceContext()
-    const { error } = await supabase.from("applications").update({ ai_fit: stored as Json }).eq("id", id)
+    const { error } = await supabase
+      .from("applications")
+      .update({ ai_fit: stored as Json })
+      .eq("workspace_id", (await getCurrentWorkspace()).id)
+      .eq("id", id)
     if (error) throw error
     refresh(`/applications/${id}`)
     return { ok: true, data: stored }
@@ -161,13 +200,19 @@ export async function saveAiFit(id: string, fit: unknown, cvVersionId: string | 
 
 async function touch(applicationId: string) {
   const { supabase } = await workspaceContext()
-  await supabase.from("applications").update({ last_activity_at: new Date().toISOString() }).eq("id", applicationId)
+  const { error } = await supabase
+    .from("applications")
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq("workspace_id", (await getCurrentWorkspace()).id)
+    .eq("id", applicationId)
+  if (error) throw error
 }
 
 export async function addEvent(applicationId: string, input: EventInput): Promise<ActionResult> {
   try {
     const v = EventSchema.parse(input)
     const { supabase, ws } = await workspaceContext()
+    await assertInWorkspace("applications", applicationId)
     const { error } = await supabase.from("stage_events").insert({ ...v, workspace_id: ws.id, application_id: applicationId })
     if (error) throw error
     await touch(applicationId)
@@ -182,7 +227,7 @@ export async function updateEvent(id: string, applicationId: string, input: Even
   try {
     const v = EventSchema.parse(input)
     const { supabase } = await workspaceContext()
-    const { error } = await supabase.from("stage_events").update(v).eq("id", id)
+    const { error } = await supabase.from("stage_events").update(v).eq("workspace_id", (await getCurrentWorkspace()).id).eq("id", id)
     if (error) throw error
     refresh(`/applications/${applicationId}`)
     return { ok: true, data: undefined }
@@ -194,7 +239,7 @@ export async function updateEvent(id: string, applicationId: string, input: Even
 export async function deleteEvent(id: string, applicationId: string): Promise<ActionResult> {
   try {
     const { supabase } = await workspaceContext()
-    const { error } = await supabase.from("stage_events").delete().eq("id", id)
+    const { error } = await supabase.from("stage_events").delete().eq("workspace_id", (await getCurrentWorkspace()).id).eq("id", id)
     if (error) throw error
     refresh(`/applications/${applicationId}`)
     return { ok: true, data: undefined }
@@ -241,7 +286,7 @@ export async function updateCv(id: string, input: { name: string; extracted_text
   try {
     const v = CvSchema.parse(input)
     const { supabase } = await workspaceContext()
-    const { error } = await supabase.from("cv_versions").update(v).eq("id", id)
+    const { error } = await supabase.from("cv_versions").update(v).eq("workspace_id", (await getCurrentWorkspace()).id).eq("id", id)
     if (error) throw error
     refresh("/cv")
     return { ok: true, data: undefined }
@@ -253,8 +298,9 @@ export async function updateCv(id: string, input: { name: string; extracted_text
 export async function setDefaultCv(id: string): Promise<ActionResult> {
   try {
     const { supabase, ws } = await workspaceContext()
+    await assertInWorkspace("cv_versions", id)
     await supabase.from("cv_versions").update({ is_default: false }).eq("workspace_id", ws.id).eq("is_default", true)
-    const { error } = await supabase.from("cv_versions").update({ is_default: true }).eq("id", id)
+    const { error } = await supabase.from("cv_versions").update({ is_default: true }).eq("workspace_id", ws.id).eq("id", id)
     if (error) throw error
     refresh("/cv")
     return { ok: true, data: undefined }
@@ -266,7 +312,13 @@ export async function setDefaultCv(id: string): Promise<ActionResult> {
 export async function deleteCv(id: string): Promise<ActionResult> {
   try {
     const { supabase } = await workspaceContext()
-    const { data: cv } = await supabase.from("cv_versions").select("file_path").eq("id", id).single()
+    const { data: cv } = await supabase
+      .from("cv_versions")
+      .select("file_path")
+      .eq("workspace_id", (await getCurrentWorkspace()).id)
+      .eq("id", id)
+      .maybeSingle()
+    if (!cv) throw new StaleError()
     const { error } = await supabase.from("cv_versions").delete().eq("id", id)
     if (error) throw error
     if (cv?.file_path) await supabase.storage.from("cvs").remove([cv.file_path])
@@ -340,6 +392,8 @@ export async function saveStages(input: z.input<typeof StageListSchema>): Promis
     const { supabase, ws } = await workspaceContext()
     const { data: existing, error: exErr } = await supabase.from("stages").select("id").eq("workspace_id", ws.id)
     if (exErr) throw exErr
+    const existingIds = new Set(existing.map((s) => s.id))
+    if (list.some((s) => s.id && !existingIds.has(s.id))) throw new StaleError()
     const keep = new Set(list.map((s) => s.id).filter(Boolean))
     const removed = existing.filter((s) => !keep.has(s.id)).map((s) => s.id)
     if (removed.length) {
@@ -354,7 +408,7 @@ export async function saveStages(input: z.input<typeof StageListSchema>): Promis
     for (const [position, s] of list.entries()) {
       const row = { name: s.name, kind: s.kind, position }
       const { error } = s.id
-        ? await supabase.from("stages").update(row).eq("id", s.id)
+        ? await supabase.from("stages").update(row).eq("workspace_id", ws.id).eq("id", s.id)
         : await supabase.from("stages").insert({ ...row, workspace_id: ws.id })
       if (error) throw error
     }
@@ -399,7 +453,7 @@ export async function inviteMember(email: string): Promise<ActionResult> {
     const v = z.email("Email không hợp lệ").parse(email.trim().toLowerCase())
     const { supabase, ws } = await workspaceContext()
     if (ws.role !== "owner") throw new Error("Chỉ chủ workspace được mời thành viên")
-    const { error } = await supabase.from("workspace_members").insert({ workspace_id: ws.id, email: v, role: "member" })
+    const { error } = await supabase.rpc("invite_member", { p_ws: ws.id, p_email: v })
     if (error?.code === "23505") throw new Error("Email này đã có trong workspace")
     if (error) throw error
     refresh("/settings")

@@ -215,3 +215,29 @@ test("a stranger who was never invited is turned away", async ({ browser }, info
   await expect(page.getByText("Email này không có quyền truy cập")).toBeVisible()
   await ctx.close()
 })
+
+test("a stale tab cannot write into a workspace switched in another tab", async ({ page, browser }, info) => {
+  test.skip(info.project.name !== "laptop", "once is enough")
+  // laptop owner shares their workspace with the phone user (who also owns one)
+  await login(page, info.project.name)
+  await page.goto("/settings")
+  await page.getByLabel("Mời thành viên").fill("e2e-phone@local.test")
+  await page.getByRole("button", { name: "Mời", exact: true }).click()
+  await expect(page.getByTestId("members").getByText("e2e-phone@local.test")).toBeVisible()
+
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const tab1 = await ctx.newPage()
+  await login(tab1, "phone")
+  await tab1.goto("/settings")
+  await expect(tab1.getByRole("heading", { name: "Các vòng" })).toBeVisible()
+
+  const tab2 = await ctx.newPage()
+  await tab2.goto("/settings")
+  await tab2.getByLabel("Chọn workspace").first().selectOption({ label: "Workspace của e2e-laptop (được mời)" })
+  await expect(tab2.getByRole("link", { name: /Workspace của e2e-laptop/ })).toBeVisible()
+
+  // tab1 still shows the phone user's own stages; saving must be refused
+  await tab1.getByRole("button", { name: "Lưu các vòng" }).click()
+  await expect(tab1.getByText(/không thuộc workspace đang chọn/)).toBeVisible()
+  await ctx.close()
+})

@@ -23,7 +23,20 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "applications": {
+            "app_flags": {
+                  Row: {
+                    "key": string
+                  }
+                  Insert: {
+                    "key": string
+                  }
+                  Update: {
+                    "key"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"applications": {
                   Row: {
                     "ai_fit": Json | null,"ai_summary": Json | null,"applied_at": string,"company": string,"created_at": string,"cv_version_id": string | null,"id": string,"jd_text": string | null,"jd_url": string | null,"last_activity_at": string,"location": string | null,"next_action": string | null,"next_action_due": string | null,"position": string,"salary": string | null,"search": unknown,"source": string | null,"stage_id": string,"updated_at": string,"workspace_id": string
                   }
@@ -35,17 +48,17 @@ export type Database = {
                   }
                   Relationships: [
                     {
-      foreignKeyName: "applications_cv_version_id_fkey"
-      columns: ["cv_version_id"]
+      foreignKeyName: "applications_cv_version_id_workspace_id_fkey"
+      columns: ["cv_version_id","workspace_id"]
 isOneToOne: false
       referencedRelation: "cv_versions"
-      referencedColumns: ["id"]
+      referencedColumns: ["id","workspace_id"]
     },{
-      foreignKeyName: "applications_stage_id_fkey"
-      columns: ["stage_id"]
+      foreignKeyName: "applications_stage_id_workspace_id_fkey"
+      columns: ["stage_id","workspace_id"]
 isOneToOne: false
       referencedRelation: "stages"
-      referencedColumns: ["id"]
+      referencedColumns: ["id","workspace_id"]
     },{
       foreignKeyName: "applications_workspace_id_fkey"
       columns: ["workspace_id"]
@@ -104,17 +117,17 @@ isOneToOne: true
                   }
                   Relationships: [
                     {
-      foreignKeyName: "stage_events_application_id_fkey"
-      columns: ["application_id"]
+      foreignKeyName: "stage_events_application_id_workspace_id_fkey"
+      columns: ["application_id","workspace_id"]
 isOneToOne: false
       referencedRelation: "applications"
-      referencedColumns: ["id"]
+      referencedColumns: ["id","workspace_id"]
     },{
-      foreignKeyName: "stage_events_stage_id_fkey"
-      columns: ["stage_id"]
+      foreignKeyName: "stage_events_stage_id_workspace_id_fkey"
+      columns: ["stage_id","workspace_id"]
 isOneToOne: false
       referencedRelation: "stages"
-      referencedColumns: ["id"]
+      referencedColumns: ["id","workspace_id"]
     },{
       foreignKeyName: "stage_events_workspace_id_fkey"
       columns: ["workspace_id"]
@@ -163,13 +176,13 @@ isOneToOne: false
                   ]
                 },"workspaces": {
                   Row: {
-                    "created_at": string,"id": string,"name": string,"owner_id": string,"updated_at": string
+                    "created_at": string,"id": string,"name": string,"owner_id": string,"personal": boolean,"updated_at": string
                   }
                   Insert: {
-                    "created_at"?: string,"id"?: string,"name": string,"owner_id"?: string,"updated_at"?: string
+                    "created_at"?: string,"id"?: string,"name": string,"owner_id": string,"personal"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"name"?: string,"owner_id"?: string,"updated_at"?: string
+                    "created_at"?: string,"id"?: string,"name"?: string,"owner_id"?: string,"personal"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -180,14 +193,17 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "create_workspace":
-{ Args: { "p_name": string }; Returns: string
+            "create_personal_workspace":
+{ Args: { "p_email": string,"p_user": string }; Returns: string
                            },
 "ensure_user_setup":
-{ Args: { "p_personal": boolean }; Returns: undefined
+{ Args: Record<PropertyKey, never>; Returns: undefined
                            },
 "has_workspace_access":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"invite_member":
+{ Args: { "p_email": string,"p_ws": string }; Returns: undefined
                            },
 "is_member":
 { Args: { "ws": string }; Returns: boolean
@@ -200,6 +216,9 @@ isOneToOne: false
                            },
 "jwt_email":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"jwt_email_trusted":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "move_application":
 { Args: { "p_app": string,"p_date"?: string,"p_stage": string }; Returns: undefined

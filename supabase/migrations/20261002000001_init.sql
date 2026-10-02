@@ -1,4 +1,12 @@
 -- Job Tracker v1 schema: workspaces own all data; members share it.
+--
+-- Trust model
+-- * Personal workspaces are created only by the server (service role) after it
+--   checks ALLOWED_EMAILS — users cannot create workspaces themselves.
+-- * Invites are claimed only by Google sign-ins (verified email). Local dev may
+--   allow password logins via the `allow_password_login` row in app_flags (supabase/seed.sql).
+-- * Every child row carries workspace_id and composite FKs keep references
+--   (stage, CV, application) inside the same workspace.
 
 create extension if not exists pgcrypto;
 
@@ -9,25 +17,42 @@ begin
   return new;
 end $$;
 
--- Email of the caller, from the verified JWT.
+-- Email of the caller, from the JWT.
 create or replace function public.jwt_email()
 returns text language sql stable as $$
   select lower(coalesce(auth.jwt() ->> 'email', ''))
+$$;
+
+-- Deployment flags; no policies, so only security-definer code can read them.
+create table public.app_flags (key text primary key);
+alter table public.app_flags enable row level security;
+
+-- The JWT email can be trusted to claim invites: Google sign-ins, or password
+-- logins when explicitly allowed (local development only).
+create or replace function public.jwt_email_trusted()
+returns boolean language sql stable security definer set search_path = '' as $$
+  select public.jwt_email() <> '' and (
+    coalesce(auth.jwt() -> 'app_metadata' ->> 'provider', '') = 'google'
+    or exists (select 1 from public.app_flags where key = 'allow_password_login')
+  )
 $$;
 
 -- workspaces + members --------------------------------------------------
 create table public.workspaces (
   id uuid primary key default gen_random_uuid(),
   name text not null check (length(trim(name)) > 0),
-  owner_id uuid not null default auth.uid() references auth.users on delete cascade,
+  owner_id uuid not null references auth.users on delete cascade,
+  personal boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- one personal workspace per owner (also makes first-login setup race-safe)
+create unique index workspaces_one_personal on public.workspaces (owner_id) where personal;
 
 create table public.workspace_members (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces on delete cascade,
-  email text not null check (email = lower(trim(email)) and email like '%@%'),
+  email text not null check (email = lower(trim(email)) and email like '%_@_%'),
   user_id uuid references auth.users on delete cascade,
   role text not null default 'member' check (role in ('owner', 'member')),
   created_at timestamptz not null default now(),
@@ -35,16 +60,6 @@ create table public.workspace_members (
 );
 create index workspace_members_user_idx on public.workspace_members (user_id);
 create index workspace_members_email_idx on public.workspace_members (email);
-
--- normalize invited emails so "B@Test.dev" matches the JWT email
-create or replace function public.normalize_member_email()
-returns trigger language plpgsql as $$
-begin
-  new.email = lower(trim(new.email));
-  return new;
-end $$;
-create trigger workspace_members_normalize before insert or update of email on public.workspace_members
-  for each row execute function public.normalize_member_email();
 
 -- Membership checks bypass RLS (security definer) so policies don't recurse.
 create or replace function public.is_member(ws uuid)
@@ -72,12 +87,13 @@ exception when invalid_text_representation then
   return false;
 end $$;
 
--- Invited or member anywhere (by email): used by the sign-in gate.
+-- Member, or holder of a claimable invite: used by the sign-in gate.
 create or replace function public.has_workspace_access()
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from public.workspace_members m
-    where m.user_id = auth.uid() or (m.user_id is null and m.email = public.jwt_email() and public.jwt_email() <> '')
+    where m.user_id = auth.uid()
+       or (m.user_id is null and public.jwt_email_trusted() and m.email = public.jwt_email())
   )
 $$;
 
@@ -89,7 +105,8 @@ create table public.stages (
   position int not null default 0,
   kind text not null default 'active' check (kind in ('active', 'offer', 'closed')),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (id, workspace_id)
 );
 create index stages_ws_idx on public.stages (workspace_id, position);
 
@@ -102,7 +119,8 @@ create table public.cv_versions (
   extracted_text text not null default '',
   is_default boolean not null default false,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (id, workspace_id)
 );
 create unique index cv_versions_one_default on public.cv_versions (workspace_id) where is_default;
 
@@ -117,8 +135,8 @@ create table public.applications (
   salary text,
   location text,
   applied_at date not null default current_date,
-  stage_id uuid not null references public.stages on delete restrict,
-  cv_version_id uuid references public.cv_versions on delete restrict,
+  stage_id uuid not null,
+  cv_version_id uuid,
   next_action text,
   next_action_due date,
   ai_summary jsonb,
@@ -129,7 +147,10 @@ create table public.applications (
       coalesce(company, '') || ' ' || coalesce(position, '') || ' ' || coalesce(jd_text, ''))
   ) stored,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (id, workspace_id),
+  foreign key (stage_id, workspace_id) references public.stages (id, workspace_id) on delete restrict,
+  foreign key (cv_version_id, workspace_id) references public.cv_versions (id, workspace_id) on delete restrict
 );
 create index applications_ws_idx on public.applications (workspace_id, applied_at desc);
 create index applications_search_idx on public.applications using gin (search);
@@ -137,28 +158,42 @@ create index applications_search_idx on public.applications using gin (search);
 create table public.stage_events (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces on delete cascade,
-  application_id uuid not null references public.applications on delete cascade,
-  stage_id uuid references public.stages on delete set null,
+  application_id uuid not null,
+  stage_id uuid,
   event_date date not null default current_date,
   type text not null default 'note' check (type in ('stage_change', 'note', 'interview')),
   interviewer text,
   notes text,
   questions text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  foreign key (application_id, workspace_id) references public.applications (id, workspace_id) on delete cascade,
+  foreign key (stage_id, workspace_id) references public.stages (id, workspace_id) on delete set null (stage_id)
 );
 create index stage_events_app_idx on public.stage_events (application_id, event_date desc);
 create index stage_events_ws_idx on public.stage_events (workspace_id);
 
--- events always live in their application's workspace
+-- events default to their application's workspace (the composite FK enforces it)
 create or replace function public.stage_event_workspace()
 returns trigger language plpgsql as $$
 begin
-  select a.workspace_id into new.workspace_id from public.applications a where a.id = new.application_id;
+  if new.workspace_id is null then
+    select a.workspace_id into new.workspace_id from public.applications a where a.id = new.application_id;
+  end if;
   return new;
 end $$;
-create trigger stage_events_workspace before insert or update of application_id on public.stage_events
+create trigger stage_events_workspace before insert on public.stage_events
   for each row execute function public.stage_event_workspace();
+
+-- rows never move between workspaces
+create or replace function public.workspace_id_immutable()
+returns trigger language plpgsql as $$
+begin
+  if new.workspace_id is distinct from old.workspace_id then
+    raise exception 'workspace_id cannot change' using errcode = '42501';
+  end if;
+  return new;
+end $$;
 
 create table public.settings (
   workspace_id uuid primary key references public.workspaces on delete cascade,
@@ -180,8 +215,9 @@ begin
     execute format('create trigger %I_updated before update on public.%I
       for each row execute function public.set_updated_at()', t, t);
   end loop;
-  -- member-editable data
   foreach t in array array['stages', 'cv_versions', 'applications', 'stage_events'] loop
+    execute format('create trigger %I_ws_immutable before update of workspace_id on public.%I
+      for each row execute function public.workspace_id_immutable()', t, t);
     execute format('alter table public.%I enable row level security', t);
     execute format('create policy "member_select" on public.%I for select to authenticated using (public.is_member(workspace_id))', t);
     execute format('create policy "member_insert" on public.%I for insert to authenticated with check (public.is_member(workspace_id))', t);
@@ -199,24 +235,38 @@ alter table public.workspaces enable row level security;
 create policy "member_select" on public.workspaces for select to authenticated using (public.is_member(id));
 create policy "owner_update" on public.workspaces for update to authenticated
   using (public.is_owner(id)) with check (owner_id = auth.uid());
+revoke update on public.workspaces from authenticated;
+grant update (name) on public.workspaces to authenticated;
 
+-- membership rows are written only through invite_member / ensure_user_setup;
+-- direct deletes: owner removes members, a member may leave, the owner row stays
 alter table public.workspace_members enable row level security;
 create policy "member_select" on public.workspace_members for select to authenticated
   using (public.is_member(workspace_id) or user_id = auth.uid());
-create policy "owner_invite" on public.workspace_members for insert to authenticated
-  with check (public.is_owner(workspace_id) and role = 'member');
--- owner removes members; a member may leave; nobody removes the owner row
 create policy "remove_member" on public.workspace_members for delete to authenticated
   using (role = 'member' and (public.is_owner(workspace_id) or user_id = auth.uid()));
+revoke insert, update on public.workspace_members from authenticated, anon;
 
--- workspace bootstrap (security definer: runs the multi-table seed atomically)
-create or replace function public.create_workspace(p_name text)
+-- functions --------------------------------------------------------------
+revoke execute on all functions in schema public from public, anon;
+
+-- Server only (service role): create the personal workspace of an allowlisted user.
+create or replace function public.create_personal_workspace(p_user uuid, p_email text)
 returns uuid language plpgsql security definer set search_path = '' as $$
-declare uid uuid := auth.uid(); ws uuid;
+declare ws uuid; mail text := lower(trim(p_email));
 begin
-  if uid is null then raise exception 'not authenticated'; end if;
-  insert into public.workspaces (name, owner_id) values (p_name, uid) returning id into ws;
-  insert into public.workspace_members (workspace_id, email, user_id, role) values (ws, public.jwt_email(), uid, 'owner');
+  select id into ws from public.workspaces where owner_id = p_user and personal;
+  if ws is not null then return ws; end if;
+  insert into public.workspaces (name, owner_id, personal)
+    values ('Workspace của ' || coalesce(nullif(split_part(mail, '@', 1), ''), 'tôi'), p_user, true)
+    on conflict (owner_id) where personal do nothing
+    returning id into ws;
+  if ws is null then  -- lost a race with a concurrent first request
+    select id into ws from public.workspaces where owner_id = p_user and personal;
+    return ws;
+  end if;
+  insert into public.workspace_members (workspace_id, email, user_id, role) values (ws, mail, p_user, 'owner')
+    on conflict (workspace_id, email) do update set user_id = excluded.user_id, role = 'owner';
   insert into public.settings (workspace_id) values (ws);
   insert into public.stages (workspace_id, name, position, kind) values
     (ws, 'Đã nộp', 0, 'active'),
@@ -229,27 +279,33 @@ begin
     (ws, 'Ghosted', 7, 'closed');
   return ws;
 end $$;
-revoke execute on function public.create_workspace(text) from public, anon;
-grant execute on function public.create_workspace(text) to authenticated;
+revoke execute on function public.create_personal_workspace(uuid, text) from public, anon, authenticated;
+grant execute on function public.create_personal_workspace(uuid, text) to service_role;
 
--- On sign-in: claim pending invites for this email; create the personal
--- workspace once when the caller is allowed to own one (decided by the app).
-create or replace function public.ensure_user_setup(p_personal boolean)
+-- Owner invites an email to the workspace.
+create or replace function public.invite_member(p_ws uuid, p_email text)
 returns void language plpgsql security definer set search_path = '' as $$
-declare uid uuid := auth.uid(); mail text := public.jwt_email();
+declare mail text := lower(trim(p_email));
 begin
-  if uid is null then raise exception 'not authenticated'; end if;
-  if mail <> '' then
-    update public.workspace_members set user_id = uid where user_id is null and email = mail;
+  if not public.is_owner(p_ws) then
+    raise exception 'only the owner can invite' using errcode = '42501';
   end if;
-  if p_personal and not exists (select 1 from public.workspaces where owner_id = uid) then
-    perform public.create_workspace('Workspace của ' || coalesce(nullif(split_part(mail, '@', 1), ''), 'tôi'));
+  if mail !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+    raise exception 'invalid email' using errcode = '22023';
+  end if;
+  insert into public.workspace_members (workspace_id, email, role) values (p_ws, mail, 'member');
+end $$;
+
+-- On sign-in: claim pending invites addressed to this (trusted) email.
+create or replace function public.ensure_user_setup()
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if public.jwt_email_trusted() then
+    update public.workspace_members set user_id = auth.uid()
+     where user_id is null and email = public.jwt_email();
   end if;
 end $$;
-revoke execute on function public.ensure_user_setup(boolean) from public, anon;
-grant execute on function public.ensure_user_setup(boolean) to authenticated;
-revoke execute on function public.has_workspace_access() from public, anon;
-grant execute on function public.has_workspace_access() to authenticated;
 
 -- move an application to another stage + log it, atomically (runs under RLS)
 create or replace function public.move_application(p_app uuid, p_stage uuid, p_date date default current_date)
@@ -264,7 +320,12 @@ begin
   insert into public.stage_events (application_id, stage_id, event_date, type)
   values (p_app, p_stage, p_date, 'stage_change');
 end $$;
-grant execute on function public.move_application(uuid, uuid, date) to authenticated;
+
+grant execute on function
+  public.is_member(uuid), public.is_owner(uuid), public.is_member_folder(text),
+  public.has_workspace_access(), public.invite_member(uuid, text), public.ensure_user_setup(),
+  public.move_application(uuid, uuid, date), public.jwt_email(), public.jwt_email_trusted()
+  to authenticated;
 
 -- storage bucket for CV files: cvs/{workspace_id}/...
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

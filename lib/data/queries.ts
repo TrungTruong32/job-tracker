@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 import { resolveAiConfig } from "@/lib/ai/config"
 import type { AiProvider } from "@/lib/ai/providers"
 import { decryptSecret, maskKey } from "@/lib/crypto"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { requireUser } from "@/lib/supabase/server"
 import { pickWorkspace, type WorkspaceLite, type WorkspaceRole } from "@/lib/workspace/pick"
 import type { Application, CvVersion, Member, PublicSettings, Stage, StageEvent } from "./types"
@@ -13,11 +14,21 @@ export const WS_COOKIE = "jt_ws"
 const APP_COLUMNS =
   "id,workspace_id,company,position,source,jd_url,jd_text,salary,location,applied_at,stage_id,cv_version_id,next_action,next_action_due,ai_summary,ai_fit,last_activity_at,created_at,updated_at"
 
-/** Claim pending invites and create the personal workspace once; cached per request. */
+/**
+ * Claim pending invites; for allowlisted users also create the personal workspace
+ * (server-side with the service role — users cannot create workspaces). Cached per request.
+ */
 export const ensureSetup = cache(async () => {
-  const { supabase, canOwn } = await requireUser()
-  const { error } = await supabase.rpc("ensure_user_setup", { p_personal: canOwn })
+  const { supabase, user, canOwn } = await requireUser()
+  const { error } = await supabase.rpc("ensure_user_setup")
   if (error) throw error
+  if (canOwn && user.email) {
+    const { error: wsErr } = await createAdminClient().rpc("create_personal_workspace", {
+      p_user: user.id,
+      p_email: user.email,
+    })
+    if (wsErr) throw wsErr
+  }
 })
 
 export const getWorkspaces = cache(async (): Promise<WorkspaceLite[]> => {

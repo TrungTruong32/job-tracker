@@ -141,3 +141,25 @@ test("drag a card to another column (laptop)", async ({ page }, info) => {
   await expect(page.getByText("Đã chuyển sang PV1")).toBeVisible()
   await expect(target.getByText("ABC AI")).toBeVisible()
 })
+
+test("score the application against the CV", async ({ page }, info) => {
+  await login(page, info.project.name)
+  let sent: { jdText: string; cvText: string } | null = null
+  await page.route("**/api/ai/match", async (route) => {
+    sent = route.request().postDataJSON()
+    await route.fulfill({
+      json: { score: "82", matched_skills: ["Python", "RAG"], missing_skills: ["Kubernetes"], suggestions: ["Nhấn mạnh dự án RAG"] },
+    })
+  })
+  const href = await page.locator('a[href^="/applications/"]').first().getAttribute("href")
+  await page.goto(href!)
+  const fit = page.getByTestId("cv-fit")
+  await fit.getByRole("button", { name: "Chấm điểm" }).click()
+  await expect(fit.getByText("82%")).toBeVisible()
+  await expect(fit.getByText("Kubernetes")).toBeVisible()
+  await expect(fit.getByText(/Chấm với “AI-Engineer-v3”/)).toBeVisible()
+  expect(sent!.cvText).toContain("Xây dựng hệ thống RAG")
+  // persisted: survives a reload
+  await page.reload()
+  await expect(page.getByTestId("cv-fit").getByText("82%")).toBeVisible()
+})

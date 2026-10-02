@@ -45,8 +45,8 @@ describe("extractCvText", () => {
     expect(r.tooShort).toBe(true)
   })
 
-  it("rejects files over 5MB", async () => {
-    await expect(extractCvText(new Uint8Array(MAX_CV_BYTES + 1), "tex")).rejects.toThrow(/5MB/)
+  it("rejects files over 4MB (Vercel caps request bodies at 4.5MB)", async () => {
+    await expect(extractCvText(new Uint8Array(MAX_CV_BYTES + 1), "tex")).rejects.toThrow(/4MB/)
   })
 
   it("reports an unreadable PDF clearly", async () => {

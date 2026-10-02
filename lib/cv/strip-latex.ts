@@ -6,9 +6,16 @@ const DROP_WITH_ARGS = new Set([
   "vspace", "hspace", "setlength", "addtolength", "usepackage", "documentclass", "newcommand",
   "renewcommand", "pagestyle", "thispagestyle", "geometry", "titleformat", "titlespacing",
   "definecolor", "color", "fontsize", "label", "includegraphics", "setlist", "linespread",
+  "def", "hypersetup", "providecommand", "newenvironment", "renewenvironment", "setcounter",
+  "addtocounter", "input", "include", "pdfgentounicode", "urlstyle", "raggedright", "raggedbottom",
 ])
 
+// Environments whose opening takes layout arguments (widths, column specs) rather than content.
+const LAYOUT_ENVS = new Set(["tabular", "tabular*", "tabularx", "longtable", "minipage", "multicols", "array"])
+
 const SECTION = new Set(["section", "section*", "subsection", "subsection*", "cvsection", "resumeSection"])
+
+const unescapeUrl = (u: string) => u.replace(/\\([_#%&$~])/g, "$1")
 
 /** Read a balanced {...} group starting at s[i] === "{"; returns [content, indexAfter]. */
 function readGroup(s: string, i: number): [string, number] {
@@ -51,6 +58,12 @@ function convert(s: string): string {
       i++
       continue
     }
+    if (c === "&") {
+      // table column separator
+      out += " "
+      i++
+      continue
+    }
     if (c === "~") {
       out += " "
       i++
@@ -66,7 +79,7 @@ function convert(s: string): string {
     if (next === "\\") {
       // line break: swallow the source newline that usually follows
       out += "\n"
-      i += 2
+      i = skipOptional(s, i + 2) // \\[4pt]
       while (s[i] === " " || s[i] === "\t") i++
       if (s[i] === "\r") i++
       if (s[i] === "\n") i++
@@ -88,7 +101,12 @@ function convert(s: string): string {
 
     if (base === "begin" || base === "end") {
       i = skipOptional(s, i)
-      if (s[i] === "{") i = readGroup(s, i)[1]
+      let env = ""
+      if (s[i] === "{") [env, i] = readGroup(s, i)
+      if (base === "begin" && LAYOUT_ENVS.has(env)) {
+        i = skipOptional(s, i)
+        while (s[i] === "{") i = skipOptional(s, readGroup(s, i)[1])
+      }
       // an environment marker on its own line shouldn't leave a blank line
       if (out === "" || out.endsWith("\n")) {
         let k = i
@@ -112,6 +130,7 @@ function convert(s: string): string {
       if (s[i] === "{") [url, i] = readGroup(s, i)
       i = skipOptional(s, i)
       if (s[i] === "{") [text, i] = readGroup(s, i)
+      url = unescapeUrl(url)
       const t = convert(text).trim()
       out += t && t !== url ? `${t} (${url})` : url
       continue
@@ -119,7 +138,7 @@ function convert(s: string): string {
     if (base === "url") {
       if (s[i] === "{") {
         const [url, j] = readGroup(s, i)
-        out += url
+        out += unescapeUrl(url)
         i = j
       }
       continue
@@ -138,6 +157,10 @@ function convert(s: string): string {
       continue
     }
     if (DROP_WITH_ARGS.has(base)) {
+      // \newcommand\name[1]{...} / \def\name#1{...}: skip the macro name and parameters too
+      const macro = /^\\[a-zA-Z@]+/.exec(s.slice(i))
+      if (macro) i += macro[0].length
+      while (s[i] === "#" && /\d/.test(s[i + 1] ?? "")) i += 2
       i = skipOptional(s, i)
       while (s[i] === "{") {
         i = readGroup(s, i)[1]

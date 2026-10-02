@@ -35,4 +35,24 @@ describe("stripLatex", () => {
   it("collapses blank lines", () => {
     expect(stripLatex("A\n\n\n\nB")).toBe("A\n\nB")
   })
+
+  it("drops preamble commands when there is no \\begin{document}", () => {
+    const src = String.raw`\hypersetup{colorlinks=true, urlcolor=blue}
+\newcommand\resumeItem[1]{\item\small{#1}}
+\def\x{y}
+An Nguyen`
+    expect(stripLatex(src)).toBe("An Nguyen")
+  })
+
+  it("skips the optional spacing after a line break", () => {
+    expect(stripLatex(String.raw`A\\[4pt]B`)).toBe("A\nB")
+  })
+
+  it("drops tabular column specs", () => {
+    expect(stripLatex(String.raw`\begin{tabular*}{\textwidth}[t]{l@{\extracolsep{\fill}}r}Acme & 2024\end{tabular*}`)).toBe("Acme 2024")
+  })
+
+  it("unescapes characters inside URLs", () => {
+    expect(stripLatex(String.raw`\href{https://x.com/a\_b}{Site}`)).toBe("Site (https://x.com/a_b)")
+  })
 })

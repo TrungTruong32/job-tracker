@@ -105,7 +105,10 @@ export function SettingsForm({ settings }: { settings: PublicSettings }) {
                   <input type="checkbox" checked={removeKey} onChange={(e) => setRemoveKey(e.target.checked)} /> Xoá key đã lưu
                 </label>
               )}
-              <p className="text-xs text-muted-foreground">Key được mã hoá trên server, không bao giờ gửi lại về trình duyệt.</p>
+              {settings.ai_key_mask && !apiKey && baseUrl.replace(/\/+$/, "") !== (settings.ai_base_url ?? "").replace(/\/+$/, "") && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">Base URL đã đổi: key cũ sẽ bị xoá khi lưu, hãy nhập key cho nhà cung cấp mới.</p>
+              )}
+              <p className="text-xs text-muted-foreground">Key được mã hoá trên server, chỉ gửi tới đúng Base URL đã lưu cùng nó.</p>
             </div>
           )}
         </div>

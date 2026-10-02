@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   if (!(file instanceof File)) return NextResponse.json({ error: "Không có file" }, { status: 400 })
   const type = cvTypeOf(file.name)
   if (!type) return NextResponse.json({ error: "Chỉ hỗ trợ file .pdf hoặc .tex" }, { status: 400 })
-  if (file.size > MAX_CV_BYTES) return NextResponse.json({ error: "File quá lớn (tối đa 5MB)" }, { status: 400 })
+  if (file.size > MAX_CV_BYTES) return NextResponse.json({ error: "File quá lớn (tối đa 4MB)" }, { status: 400 })
   try {
     const { text, tooShort } = await extractCvText(new Uint8Array(await file.arrayBuffer()), type)
     return NextResponse.json({ text, tooShort, type })

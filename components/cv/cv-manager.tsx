@@ -29,7 +29,7 @@ export function CvManager({ cvs, usage }: { cvs: CvVersion[]; usage: Record<stri
     if (!file) return
     const type = cvTypeOf(file.name)
     if (!type) return toast.error("Chỉ hỗ trợ file .pdf hoặc .tex")
-    if (file.size > MAX_CV_BYTES) return toast.error("File quá lớn (tối đa 5MB)")
+    if (file.size > MAX_CV_BYTES) return toast.error("File quá lớn (tối đa 4MB)")
     setReading(true)
     try {
       const body = new FormData()

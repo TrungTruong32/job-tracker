@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { CvFitSchema, JdSummarySchema, type StoredCvFit } from "@/lib/ai/parse"
+import { nextKeyAction } from "@/lib/ai/key-policy"
 import { encryptSecret } from "@/lib/crypto"
 import { todayStr } from "@/lib/format"
 import { requireUser } from "@/lib/supabase/server"
@@ -297,10 +298,16 @@ export async function saveSettings(input: z.input<typeof SettingsSchema>): Promi
       ai_model: v.ai_model,
       stale_days: v.stale_days,
     }
-    if (v.ai_api_key !== undefined) {
-      const key = v.ai_api_key.trim()
-      if (key && !process.env.AI_KEY_SECRET) throw new Error("Server chưa cấu hình AI_KEY_SECRET")
-      patch.ai_api_key_encrypted = key ? encryptSecret(key, process.env.AI_KEY_SECRET!) : null
+    const { data: stored } = await supabase.from("settings").select("ai_base_url, ai_api_key_encrypted").maybeSingle()
+    const action = nextKeyAction(
+      { ai_base_url: stored?.ai_base_url ?? null, has_key: !!stored?.ai_api_key_encrypted },
+      { baseUrl: v.ai_base_url, apiKey: v.ai_api_key },
+    )
+    if (action === "replace") {
+      if (!process.env.AI_KEY_SECRET) throw new Error("Server chưa cấu hình AI_KEY_SECRET")
+      patch.ai_api_key_encrypted = encryptSecret(v.ai_api_key!.trim(), process.env.AI_KEY_SECRET)
+    } else if (action === "remove") {
+      patch.ai_api_key_encrypted = null
     }
     const { error } = await supabase.from("settings").upsert(patch as never)
     if (error) throw error

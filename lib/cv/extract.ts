@@ -8,7 +8,7 @@ const MIN_USEFUL_CHARS = 200
 
 /** Plain text of a CV file, plus a flag when there's too little text to be useful. */
 export async function extractCvText(bytes: Uint8Array, type: CvFileType): Promise<{ text: string; tooShort: boolean }> {
-  if (bytes.byteLength > MAX_CV_BYTES) throw new Error("File quá lớn (tối đa 5MB)")
+  if (bytes.byteLength > MAX_CV_BYTES) throw new Error("File quá lớn (tối đa 4MB)")
 
   let text: string
   if (type === "tex") {

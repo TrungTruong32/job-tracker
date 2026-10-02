@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
-import { isAllowedEmail, parseAllowedEmails } from "@/lib/auth/allowed"
+import { isAuthorizedFromEnv } from "@/lib/auth/allowed"
 
 const PUBLIC_PATHS = ["/login", "/auth"]
 
@@ -39,7 +39,7 @@ export async function proxy(request: NextRequest) {
     return r
   }
 
-  if (user && !isAllowedEmail(user.email, parseAllowedEmails(process.env.ALLOWED_EMAILS))) {
+  if (user && !isAuthorizedFromEnv(user)) {
     await supabase.auth.signOut()
     if (path.startsWith("/api/")) return NextResponse.json({ error: "Không có quyền" }, { status: 403 })
     return redirectTo("/login", "?error=forbidden")

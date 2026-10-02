@@ -333,6 +333,7 @@ export async function deleteCv(id: string): Promise<ActionResult> {
 
 const SettingsSchema = z.object({
   ai: AiUpdateSchema,
+  ai_timeout_s: z.coerce.number().int().min(15, "Thời gian chờ tối thiểu 15 giây").max(120, "Thời gian chờ tối đa 120 giây"),
   stale_days: z.coerce.number().int().min(1, "Tối thiểu 1 ngày").max(90, "Tối đa 90 ngày"),
 })
 
@@ -354,7 +355,7 @@ export async function saveSettings(input: z.input<typeof SettingsSchema>): Promi
     })
     const { error } = await supabase
       .from("settings")
-      .update({ ai_connections: ai.ai_connections as NonNullable<Json>, ai_chain: ai.ai_chain as NonNullable<Json>, stale_days: v.stale_days })
+      .update({ ai_connections: ai.ai_connections as NonNullable<Json>, ai_chain: ai.ai_chain as NonNullable<Json>, ai_timeout_s: v.ai_timeout_s, stale_days: v.stale_days })
       .eq("workspace_id", ws.id)
     if (error) throw error
     refresh("/settings")

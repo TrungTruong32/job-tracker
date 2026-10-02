@@ -9,7 +9,6 @@ export const AI_TASKS = {
     input: z.object({ jdText: z.string().trim().min(30, "JD quá ngắn để AI phân tích (cần ít nhất 30 ký tự)") }),
     messages: (i: { jdText: string }): ChatMessage[] => buildExtractMessages(i.jdText),
     output: JdSummarySchema,
-    timeoutMs: 30_000,
   },
   match: {
     input: z.object({
@@ -18,13 +17,11 @@ export const AI_TASKS = {
     }),
     messages: (i: { jdText: string; cvText: string }): ChatMessage[] => buildMatchMessages(i.jdText, i.cvText),
     output: CvFitSchema,
-    timeoutMs: 30_000,
   },
   ping: {
     input: z.object({}),
     messages: (): ChatMessage[] => buildPingMessages(),
     output: z.object({ ok: z.unknown() }),
-    timeoutMs: 20_000,
   },
 } as const
 

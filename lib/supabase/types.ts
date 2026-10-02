@@ -88,13 +88,13 @@ isOneToOne: false
                   ]
                 },"settings": {
                   Row: {
-                    "ai_chain": NonNullable<Json>,"ai_connections": NonNullable<Json>,"created_at": string,"stale_days": number,"updated_at": string,"workspace_id": string
+                    "ai_chain": NonNullable<Json>,"ai_connections": NonNullable<Json>,"ai_timeout_s": number,"created_at": string,"stale_days": number,"updated_at": string,"workspace_id": string
                   }
                   Insert: {
-                    "ai_chain"?: NonNullable<Json>,"ai_connections"?: NonNullable<Json>,"created_at"?: string,"stale_days"?: number,"updated_at"?: string,"workspace_id": string
+                    "ai_chain"?: NonNullable<Json>,"ai_connections"?: NonNullable<Json>,"ai_timeout_s"?: number,"created_at"?: string,"stale_days"?: number,"updated_at"?: string,"workspace_id": string
                   }
                   Update: {
-                    "ai_chain"?: NonNullable<Json>,"ai_connections"?: NonNullable<Json>,"created_at"?: string,"stale_days"?: number,"updated_at"?: string,"workspace_id"?: string
+                    "ai_chain"?: NonNullable<Json>,"ai_connections"?: NonNullable<Json>,"ai_timeout_s"?: number,"created_at"?: string,"stale_days"?: number,"updated_at"?: string,"workspace_id"?: string
                   }
                   Relationships: [
                     {

@@ -112,6 +112,11 @@ export function ApplicationForm({ stages, cvs, settings, application, onDone }: 
             {aiLoading ? <Loader2 className="animate-spin" /> : <Sparkles />}
             {aiLoading ? "AI đang đọc JD…" : "AI điền giúp"}
           </Button>
+          {aiLoading && (
+            <p className="text-xs text-muted-foreground" role="status">
+              Model miễn phí có thể mất 1–2 phút; nếu model lỗi, app tự chuyển sang model dự phòng.
+            </p>
+          )}
           {v.ai_summary?.required_skills.length ? (
             <p className="text-xs text-muted-foreground">
               Skill yêu cầu: {v.ai_summary.required_skills.slice(0, 10).join(", ")}

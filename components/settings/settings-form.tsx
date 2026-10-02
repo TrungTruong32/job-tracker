@@ -39,6 +39,7 @@ export function SettingsForm({ settings }: { settings: PublicSettings }) {
   const [models, setModels] = useState<Record<string, ModelInfo[] | "loading">>({})
   const [tests, setTests] = useState<Record<string, TestState>>({})
   const [staleDays, setStaleDays] = useState(String(settings.stale_days))
+  const [timeoutS, setTimeoutS] = useState(String(settings.ai_timeout_s))
   const [pending, startTransition] = useTransition()
 
   const conn = (id: string) => conns.find((c) => c.id === id)
@@ -92,7 +93,7 @@ export function SettingsForm({ settings }: { settings: PublicSettings }) {
     if (!c) return
     setTests((t) => ({ ...t, [e.key]: { status: "running" } }))
     try {
-      const ms = await testModel(forRequest(c), e.model)
+      const ms = await testModel(forRequest(c), e.model, Math.min(120, Math.max(15, Number(timeoutS) || 90)))
       setTests((t) => ({ ...t, [e.key]: { status: "ok", ms } }))
     } catch (err) {
       setTests((t) => ({ ...t, [e.key]: { status: "fail", message: err instanceof Error ? err.message : String(err) } }))
@@ -117,6 +118,7 @@ export function SettingsForm({ settings }: { settings: PublicSettings }) {
           })),
           chain: chain.map((e) => ({ connection_id: e.connection_id, model: e.model })),
         },
+        ai_timeout_s: timeoutS,
         stale_days: staleDays,
       })
       if (!res.ok) return void toast.error(res.error)
@@ -232,6 +234,12 @@ export function SettingsForm({ settings }: { settings: PublicSettings }) {
           <Button type="button" size="sm" variant="outline" onClick={testAll} disabled={!chain.length}>
             <PlugZap /> Test tất cả
           </Button>
+        </div>
+        <div className="flex items-center gap-3">
+          <Label htmlFor="ai-timeout" className="flex-1 font-normal">
+            Thời gian chờ tối đa mỗi model (giây) — model miễn phí thường chậm, nên để 60–120
+          </Label>
+          <Input id="ai-timeout" type="number" min={15} max={120} className="w-20" value={timeoutS} onChange={(e) => setTimeoutS(e.target.value)} />
         </div>
         {!chain.length ? (
           <p className="text-sm text-muted-foreground">Chưa chọn model. Bấm “Tải danh sách model” ở một kết nối rồi “Thêm”.</p>

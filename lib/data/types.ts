@@ -18,6 +18,7 @@ export type PublicSettings = {
   connections: PublicConnection[]
   chain: PublicEntry[]
   ai_ready: boolean
+  ai_timeout_s: number
   stale_days: number
 }
 

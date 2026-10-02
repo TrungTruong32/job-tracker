@@ -2,6 +2,7 @@ import "server-only"
 import { cache } from "react"
 import { cookies } from "next/headers"
 import { publicAi } from "@/lib/ai/settings"
+import { aiTimeoutMs } from "@/lib/ai/timeout"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireUser } from "@/lib/supabase/server"
 import { pickWorkspace, type WorkspaceLite, type WorkspaceRole } from "@/lib/workspace/pick"
@@ -135,5 +136,11 @@ export const getSettingsRow = cache(async () => {
 export async function getPublicSettings(): Promise<PublicSettings> {
   const row = await getSettingsRow()
   const ai = publicAi(row, process.env.AI_KEY_SECRET)
-  return { connections: ai.connections, chain: ai.chain, ai_ready: ai.ready, stale_days: row?.stale_days ?? 7 }
+  return {
+    connections: ai.connections,
+    chain: ai.chain,
+    ai_ready: ai.ready,
+    ai_timeout_s: aiTimeoutMs(row) / 1000,
+    stale_days: row?.stale_days ?? 7,
+  }
 }

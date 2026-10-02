@@ -46,7 +46,7 @@ export async function runAiTask<T extends AiTask>(
     if (conn && isBrowserProvider(conn.provider)) {
       const messages = (def.messages as (i: unknown) => ReturnType<typeof def.messages>)(valid.data)
       return chatJson({ baseUrl: conn.base_url, apiKey: null, model: entry.model }, messages, def.output as never, {
-        timeoutMs: def.timeoutMs,
+        timeoutMs: settings.ai_timeout_s * 1000,
       }).catch(ollamaHint) as Promise<AiTaskOutput<T>>
     }
     const r = await postJson<{ data: AiTaskOutput<T> }>("/api/ai/run", { task, index, input: valid.data })
@@ -90,11 +90,12 @@ export async function loadModels(conn: {
 export async function testModel(
   conn: { id: string; provider: AiProvider; base_url: string; api_key?: string },
   model: string,
+  timeoutS: number,
 ): Promise<number> {
   if (isBrowserProvider(conn.provider)) {
     const started = performance.now()
     await chatJson({ baseUrl: conn.base_url, apiKey: null, model }, AI_TASKS.ping.messages(), AI_TASKS.ping.output, {
-      timeoutMs: AI_TASKS.ping.timeoutMs,
+      timeoutMs: timeoutS * 1000,
     }).catch(ollamaHint)
     return Math.round(performance.now() - started)
   }
@@ -103,6 +104,7 @@ export async function testModel(
     model,
     connectionId: conn.id,
     apiKey: conn.api_key || undefined,
+    timeoutS,
   })
   return r.ms
 }

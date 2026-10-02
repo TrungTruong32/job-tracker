@@ -109,6 +109,7 @@ function Header({ cv, kind, t, qr }: { cv: ResolvedCv; kind: HeaderKind; t: Them
       </View>
       {qr ? (
         <View style={{ position: "absolute", right: 0, top: 0, alignItems: "flex-end" }}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- React-PDF's Image has no alt; the caption below names it */}
           <Image src={qr} style={{ width: qrSize, height: qrSize }} />
           <Text style={{ fontSize: t.fs * 0.6, fontWeight: 700 }}>Portfolio QR Code</Text>
         </View>

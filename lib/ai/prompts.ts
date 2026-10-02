@@ -86,3 +86,42 @@ Return ONLY JSON: {"bullets": [{"id": <same id>, "text": <shorter bullet>}]} wit
     { role: "user", content: JSON.stringify({ bullets }) },
   ]
 }
+
+export function buildKeywordMessages(jdText: string): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content: `You extract ATS keywords from a job description. Return ONLY JSON:
+{"keywords": [{"term": string, "aliases": string[], "weight": "required" | "preferred", "category": string}]}
+- at most 40 keywords; each term 1-4 words, as it would appear on a CV (e.g. "PyTorch", "RAG", "CI/CD", "stakeholder management")
+- aliases: abbreviations / full forms / common variants ("LLM" <-> "large language model", "K8s" <-> "Kubernetes"); [] if none
+- weight "required" for must-haves / core responsibilities, "preferred" for nice-to-have / bonus
+- category: short group name (Language, Framework, Cloud, AI/ML, Data, Soft skill, Domain...)
+- skip generic words (team, work, experience, years) and benefits.`,
+    },
+    { role: "user", content: jdText.length > 12_000 ? jdText.slice(0, 12_000) : jdText },
+  ]
+}
+
+export function buildSuggestMessages(input: {
+  jdSummary: string
+  missing: string[]
+  weak: string[]
+  bullets: { id: string; text: string }[]
+  summary?: string
+}): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content: `You improve CV bullets for a specific job. Return ONLY JSON:
+{"bullets": [{"id": <same id>, "text": <improved bullet>, "reason": <short reason in Vietnamese>, "keywords": string[]}], "summary": {"text": string, "reason": string} | null}
+Rules:
+- Never invent facts, numbers, tools or responsibilities. Only rephrase what the bullet already says.
+- Add a missing/weak keyword ONLY when the bullet already describes that work (e.g. "deployed containers to the cluster" -> "Kubernetes" is OK only if the bullet implies it).
+- Start with a strong past-tense verb, keep it to about 2 lines, keep **bold** / *italic* / [text](url) markup and every number.
+- Return only bullets you actually improved (none is fine). "keywords" = JD keywords the new text now contains.
+- summary: rewrite the CV summary for this job with the same facts (or null if no summary was given).`,
+    },
+    { role: "user", content: JSON.stringify(input) },
+  ]
+}

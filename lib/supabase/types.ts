@@ -69,16 +69,22 @@ isOneToOne: false
                   ]
                 },"cv_documents": {
                   Row: {
-                    "content": NonNullable<Json>,"created_at": string,"id": string,"name": string,"style": NonNullable<Json>,"target_role": string | null,"target_tags": (string)[],"template": string,"updated_at": string,"workspace_id": string
+                    "content": NonNullable<Json>,"created_at": string,"id": string,"jd_keywords": Json | null,"name": string,"style": NonNullable<Json>,"target_application_id": string | null,"target_jd": string | null,"target_role": string | null,"target_tags": (string)[],"template": string,"updated_at": string,"workspace_id": string
                   }
                   Insert: {
-                    "content"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"name": string,"style"?: NonNullable<Json>,"target_role"?: string | null,"target_tags"?: (string)[],"template"?: string,"updated_at"?: string,"workspace_id": string
+                    "content"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"jd_keywords"?: Json | null,"name": string,"style"?: NonNullable<Json>,"target_application_id"?: string | null,"target_jd"?: string | null,"target_role"?: string | null,"target_tags"?: (string)[],"template"?: string,"updated_at"?: string,"workspace_id": string
                   }
                   Update: {
-                    "content"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"name"?: string,"style"?: NonNullable<Json>,"target_role"?: string | null,"target_tags"?: (string)[],"template"?: string,"updated_at"?: string,"workspace_id"?: string
+                    "content"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"jd_keywords"?: Json | null,"name"?: string,"style"?: NonNullable<Json>,"target_application_id"?: string | null,"target_jd"?: string | null,"target_role"?: string | null,"target_tags"?: (string)[],"template"?: string,"updated_at"?: string,"workspace_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "cv_documents_target_application_fk"
+      columns: ["target_application_id","workspace_id"]
+isOneToOne: false
+      referencedRelation: "applications"
+      referencedColumns: ["id","workspace_id"]
+    },{
       foreignKeyName: "cv_documents_workspace_id_fkey"
       columns: ["workspace_id"]
 isOneToOne: false

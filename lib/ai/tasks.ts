@@ -1,7 +1,15 @@
 import { z } from "zod"
 import type { ChatMessage } from "./client"
 import { CvFitSchema, JdSummarySchema } from "./parse"
-import { buildExtractMessages, buildMatchMessages, buildParseCvMessages, buildPingMessages, buildShortenMessages } from "./prompts"
+import {
+  buildExtractMessages,
+  buildKeywordMessages,
+  buildMatchMessages,
+  buildParseCvMessages,
+  buildPingMessages,
+  buildShortenMessages,
+  buildSuggestMessages,
+} from "./prompts"
 
 /** The AI jobs the app runs; same definitions on the server and in the browser (Ollama). */
 export const AI_TASKS = {
@@ -31,6 +39,46 @@ export const AI_TASKS = {
     }),
     messages: (i: { bullets: { id: string; text: string }[]; ratio: number }): ChatMessage[] => buildShortenMessages(i.bullets, i.ratio),
     output: z.object({ bullets: z.array(z.object({ id: z.string(), text: z.string() })) }),
+  },
+  extract_keywords: {
+    input: z.object({ jdText: z.string().trim().min(30, "JD quá ngắn để phân tích (cần ít nhất 30 ký tự)") }),
+    messages: (i: { jdText: string }): ChatMessage[] => buildKeywordMessages(i.jdText),
+    output: z.object({
+      keywords: z
+        .array(
+          z.object({
+            term: z.string().trim().min(1).max(60),
+            aliases: z.preprocess((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()) : []), z.array(z.string())),
+            weight: z.preprocess((v) => (v === "required" ? "required" : "preferred"), z.enum(["required", "preferred"])),
+            category: z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : "Khác"), z.string()),
+          }),
+        )
+        .max(60),
+    }),
+  },
+  suggest_edits: {
+    input: z.object({
+      jdSummary: z.string().max(4000),
+      missing: z.array(z.string()).max(40),
+      weak: z.array(z.string()).max(40),
+      bullets: z.array(z.object({ id: z.string(), text: z.string().min(1) })).min(1).max(25),
+      summary: z.string().max(3000).optional(),
+    }),
+    messages: (i: { jdSummary: string; missing: string[]; weak: string[]; bullets: { id: string; text: string }[]; summary?: string }): ChatMessage[] =>
+      buildSuggestMessages(i),
+    output: z.object({
+      bullets: z
+        .array(
+          z.object({
+            id: z.string(),
+            text: z.string().min(1),
+            reason: z.preprocess((v) => (typeof v === "string" ? v : ""), z.string()),
+            keywords: z.preprocess((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []), z.array(z.string())),
+          }),
+        )
+        .default([]),
+      summary: z.object({ text: z.string().min(1), reason: z.preprocess((v) => (typeof v === "string" ? v : ""), z.string()) }).nullable().optional(),
+    }),
   },
   ping: {
     input: z.object({}),

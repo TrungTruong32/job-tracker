@@ -46,12 +46,13 @@ export function FitPanel({
   const [busy, setBusy] = useState<"fit" | "ai" | null>(null)
   const [shortened, setShortened] = useState<Shortened[] | null>(null)
   const [drops, setDrops] = useState<(DropSuggestion & { take: boolean })[] | null>(null)
-  const pct = Math.round(fill.overflowPct * 100)
+  const pct = Math.max(1, Math.round(fill.overflowPct * 100))
 
   async function autoFit() {
     setBusy("fit")
     try {
-      const r = await fitStyle(measure, style, TEMPLATES[template].bounds)
+      // aim a little under a full page: column layouts can paginate a hair earlier than measured
+      const r = await fitStyle(measure, style, TEMPLATES[template].bounds, 0.995)
       onStyle(r.style)
       if (r.ok) toast.success(`Đã co vừa 1 trang (cỡ chữ ${r.style.font_size}pt, giãn dòng ${r.style.line_height.toFixed(2)}, lề ${r.style.margin_mm}mm)`)
       else toast.warning("Đã co tối đa trong giới hạn của mẫu mà vẫn tràn — cần rút gọn hoặc bỏ bớt nội dung.")

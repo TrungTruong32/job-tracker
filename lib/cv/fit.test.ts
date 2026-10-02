@@ -43,6 +43,11 @@ describe("fitStyle", () => {
     expect(r.used).toBeLessThanOrEqual(1)
   })
 
+  it("can aim below a full page to leave a safety margin", async () => {
+    const r = await fitStyle(fake(1.1), start, bounds, 0.95)
+    expect(r.used).toBeLessThanOrEqual(0.95)
+  })
+
   it("gives up within the bounds and reports failure", async () => {
     const r = await fitStyle(fake(3), start, bounds)
     expect(r.ok).toBe(false)

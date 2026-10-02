@@ -18,11 +18,12 @@ export async function fitStyle<S extends FitParams>(
   measure: (s: S) => Promise<number>,
   start: S,
   bounds: StyleBounds,
+  target = 1,
 ): Promise<{ ok: boolean; style: S; used: number; tries: number }> {
   let tries = 1
   let cur = { ...start }
   let used = await measure(cur)
-  if (used <= 1) return { ok: true, style: cur, used, tries }
+  if (used <= target) return { ok: true, style: cur, used, tries }
 
   for (const d of ORDER) {
     const min = bounds[d][0]
@@ -30,7 +31,7 @@ export async function fitStyle<S extends FitParams>(
     const atMin = { ...cur, [d]: min }
     tries++
     const usedMin = await measure(atMin)
-    if (usedMin > 1) {
+    if (usedMin > target) {
       cur = atMin
       used = usedMin
       continue
@@ -45,7 +46,7 @@ export async function fitStyle<S extends FitParams>(
       const s = { ...cur, [d]: mid }
       tries++
       const u = await measure(s)
-      if (u <= 1) {
+      if (u <= target) {
         lo = mid
         best = { style: s, used: u }
       } else hi = mid

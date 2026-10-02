@@ -52,7 +52,7 @@ function BulletRow({
       <div className="min-w-0 flex-1">
         {editing ? (
           <div className="space-y-1.5">
-            <Textarea rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Viết lại bullet cho bản CV này" />
+            <Textarea rows={3} maxLength={1000} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Viết lại bullet cho bản CV này" />
             <div className="flex gap-1.5">
               <Button
                 size="xs"
@@ -211,14 +211,15 @@ export function ContentTree(props: Props) {
               </Button>
               <Input
                 aria-label="Tiêu đề mục"
+                maxLength={60}
                 className="h-7 flex-1 border-transparent bg-transparent px-1 font-semibold shadow-none hover:border-input"
                 value={sec?.title ?? DEFAULT_TITLES[key]}
                 onChange={(e) => onChange(ops.renameSection(content, key, e.target.value))}
               />
-              <Button size="icon-xs" variant="ghost" aria-label="Đưa mục lên" disabled={si === 0 || !sec} onClick={() => onChange(ops.moveSection(content, key, -1))}>
+              <Button size="icon-xs" variant="ghost" aria-label="Đưa mục lên" disabled={si === 0 || !sec} onClick={() => onChange(ops.moveSectionAmong(content, key, -1, keys))}>
                 <ArrowUp />
               </Button>
-              <Button size="icon-xs" variant="ghost" aria-label="Đưa mục xuống" disabled={!sec || si >= content.sections.length - 1} onClick={() => onChange(ops.moveSection(content, key, 1))}>
+              <Button size="icon-xs" variant="ghost" aria-label="Đưa mục xuống" disabled={!sec || si >= keys.filter((k) => content.sections.some((s) => s.key === k)).length - 1} onClick={() => onChange(ops.moveSectionAmong(content, key, 1, keys))}>
                 <ArrowDown />
               </Button>
             </div>
@@ -226,6 +227,7 @@ export function ContentTree(props: Props) {
               <div className="space-y-1">
                 <Textarea
                   rows={4}
+                  maxLength={3000}
                   aria-label="Summary cho bản CV này"
                   value={content.summary_override ?? basics.summary ?? ""}
                   onChange={(e) => {

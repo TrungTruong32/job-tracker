@@ -19,6 +19,12 @@ describe("escapeLatex", () => {
   })
 })
 
+describe("escapeLatex extras", () => {
+  it("drops emoji and pictographs pdflatex cannot typeset", () => {
+    expect(escapeLatex("Shipped ✓ fast 🚀 ★")).toBe("Shipped  fast  ")
+  })
+})
+
 describe("inlineToLatex", () => {
   it("converts markup", () => {
     expect(inlineToLatex("Built **~120K rows** for *16 brands* — [paper](https://dl.acm.org/x_1%20y)")).toBe(
@@ -37,10 +43,21 @@ describe("exportLatex", () => {
     const tex = exportLatex(cvFor("mine"), TEMPLATES.mine.defaults, "mine")
     expect(tex).toContain("\\documentclass[10pt,a4paper]{article}")
     expect(tex).toContain("\\definecolor{cvblue}{HTML}{1F4E79}")
-    expect(tex).toContain("\\cvsection{Work Experience}")
+    expect(tex).toContain("\\cvsection{WORK EXPERIENCE}") // uppercased in JS: \uppercase breaks on UTF-8
     expect(tex).toContain("\\cvproject{Order Sync Pipeline \\& Nightly Backfill}")
     expect(tex).toContain("\\textbf{$\\sim$120K validated rows}")
     expect(tex).toContain("\\includegraphics[width=2.02cm]{qrcode.png}")
+  })
+
+  it("only includes the QR image when the file exists", () => {
+    const tex = exportLatex(cvFor("mine"), TEMPLATES.mine.defaults, "mine")
+    expect(tex).toContain(String.raw`\IfFileExists{qrcode.png}`)
+  })
+
+  it("keeps bullets that start with a bracket as bullets", () => {
+    const cv = cvFor("mine")
+    cv.sections.find((s) => s.key === "experience")!.entries[0].children[0].bullets[0].text = "[Lead] did things"
+    expect(exportLatex(cv, TEMPLATES.mine.defaults, "mine")).toContain(String.raw`\item{} [Lead] did things`)
   })
 
   it("omits the QR when disabled", () => {
@@ -57,9 +74,18 @@ describe("exportLatex", () => {
     }
   })()
 
-  it.skipIf(!pdflatex).each(["mine", "classic"] as const)("%s compiles with pdflatex", (key) => {
+  // Vietnamese letters, a Vietnamese section title, and a header with links only
+  const vietnamese = (key: "mine" | "classic") => {
+    const cv = cvFor(key)
+    cv.basics = { full_name: "Nguyễn Minh An", headline: "Kỹ sư AI", links: [{ label: "GitHub", url: "https://github.com/x_y" }] }
+    cv.sections[0].title = "Kinh nghiệm làm việc"
+    cv.sections.find((s) => s.key === "education")!.entries[0].fields.school = "Đại học Khoa học Tự nhiên, Đà Nẵng"
+    return cv
+  }
+
+  it.skipIf(!pdflatex).each(["mine", "classic"] as const)("%s compiles with pdflatex (Vietnamese, links-only header, QR on)", (key) => {
     const dir = mkdtempSync(join(tmpdir(), "cvtex-"))
-    const tex = exportLatex(cvFor(key), { ...TEMPLATES[key].defaults, show_qr: false }, key)
+    const tex = exportLatex(vietnamese(key), TEMPLATES[key].defaults, key)
     writeFileSync(join(dir, "cv.tex"), tex)
     execFileSync("pdflatex", ["-interaction=nonstopmode", "-halt-on-error", "cv.tex"], { cwd: dir, stdio: "pipe", timeout: 120_000 })
   }, 150_000)

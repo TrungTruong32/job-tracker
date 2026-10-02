@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { applyDrops, moveBullet, moveEntry, moveSection, setBulletOverride, setFieldOverride, toggleBullet, toggleEntry, toggleSection } from "./content-ops"
+import { applyDrops, moveBullet, moveEntry, moveSection, moveSectionAmong, pruneMissing, renameSection, setBulletOverride, setFieldOverride, toggleBullet, toggleEntry, toggleSection } from "./content-ops"
 import type { CvContent } from "./resolve"
 
 const base = (): CvContent => ({
@@ -71,5 +71,22 @@ describe("content ops", () => {
     toggleBullet(c, "experience", "e1", "b1", false, ALL)
     moveSection(c, "skill", -1)
     expect(JSON.stringify(c)).toBe(snapshot)
+  })
+
+  it("keeps spaces while typing a section title and allows clearing it", () => {
+    expect(renameSection(base(), "skill", "Key ").sections[2].title).toBe("Key ")
+    expect(renameSection(base(), "skill", "").sections[2].title).toBe("")
+  })
+
+  it("moves a section past hidden neighbours", () => {
+    const c: CvContent = { sections: [{ key: "experience", visible: true, items: [] }, { key: "publication", visible: true, items: [] }, { key: "skill", visible: true, items: [] }] }
+    expect(moveSectionAmong(c, "skill", -1, ["experience", "skill"]).sections.map((s) => s.key)).toEqual(["skill", "publication", "experience"])
+    expect(moveSectionAmong(c, "experience", -1, ["experience", "skill"]).sections.map((s) => s.key)).toEqual(["experience", "publication", "skill"])
+  })
+
+  it("prunes references to deleted items and bullets", () => {
+    const c: CvContent = { sections: [{ key: "experience", visible: true, items: [{ item_id: "e1", bullet_ids: ["b1", "gone"], bullet_overrides: { gone: "x", b1: "y" } }, { item_id: "deleted" }] }] }
+    const p = pruneMissing(c, (id) => (id === "e1" ? ["b1", "b2"] : null))
+    expect(p.sections[0].items).toEqual([{ item_id: "e1", bullet_ids: ["b1"], bullet_overrides: { b1: "y" } }])
   })
 })

@@ -7,6 +7,8 @@ import type { CvStyle, TemplateKey } from "./templates/types"
 // stock TeX install (pdflatex, T1 + utf8).
 
 const SPECIAL: [RegExp, string][] = [
+  // emoji, dingbats and misc symbols have no glyph in the LaTeX fonts: drop them
+  [/[\u2600-\u27BF\u2B00-\u2BFF\uFE0F]|[\u{1F000}-\u{1FAFF}]/gu, ""],
   [/\\/g, "\u0000BS\u0000"],
   [/([&%$#_{}])/g, "\\$1"],
   [/~/g, "$\\sim$"],
@@ -49,7 +51,7 @@ const ITEMIZE = "\\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt, topse
 
 function itemize(lines: string[]): string {
   if (!lines.length) return ""
-  return [ITEMIZE, ...lines.map((l) => `    \\item ${l}`), "\\end{itemize}"].join("\n")
+  return [ITEMIZE, ...lines.map((l) => `    \\item{} ${l}`), "\\end{itemize}"].join("\n")
 }
 
 type Flavor = "mine" | "classic"
@@ -95,7 +97,7 @@ function entry(x: ResolvedEntry, flavor: Flavor): string {
 }
 
 function section(s: ResolvedSection, cv: ResolvedCv, flavor: Flavor): string {
-  const title = `\\cvsection{${e(s.title)}}`
+  const title = `\\cvsection{${e(flavor === "mine" ? s.title.toLocaleUpperCase("vi") : s.title)}}`
   if (s.key === "summary") return `${title}\n${inlineToLatex(cv.basics.summary ?? "")}`
   if (s.key === "skill") return `${title}\n\\vspace{-3mm}\n${itemize(s.entries.map((x) => `\\textbf{${e(x.fields.category ?? "")}:} ${e(x.list.join(", "))}.`))}`
   if (s.key === "language") return `${title}\n${s.entries.map((x) => `${e(x.fields.name ?? "")}${x.fields.level ? ` \\textit{(${e(x.fields.level)})}` : ""}`).join(", ")}.`
@@ -115,7 +117,7 @@ function shortHandle(url: string): string {
 const PREAMBLE = (fontSize: number, marginIn: number, accent: string, sans: boolean) => `\\documentclass[${Math.round(fontSize) >= 11 ? 11 : 10}pt,a4paper]{article}
 
 \\usepackage[utf8]{inputenc}
-\\usepackage[T1]{fontenc}
+\\usepackage[T1,T5]{fontenc}
 \\usepackage[left=${marginIn}in, right=${marginIn}in, top=${marginIn}in, bottom=${marginIn}in]{geometry}
 \\usepackage{xcolor}
 \\usepackage{hyperref}
@@ -138,7 +140,7 @@ export function exportLatex(cv: ResolvedCv, style: CvStyle, template: TemplateKe
     flavor === "mine"
       ? `\\newcommand{\\cvsection}[1]{
     \\vspace{1ex}
-    \\noindent\\textbf{\\large\\color{cvblue} \\uppercase{#1}} \\textcolor{cvblue}{\\hrulefill}\\par
+    \\noindent\\textbf{\\large\\color{cvblue} #1} \\textcolor{cvblue}{\\hrulefill}\\par
     \\vspace{1ex}
 }
 \\newcommand{\\cvproject}[1]{\\textcolor{cvblue}{\\textbf{\\textit{#1}}}}
@@ -166,7 +168,7 @@ export function exportLatex(cv: ResolvedCv, style: CvStyle, template: TemplateKe
     {\\Huge \\textbf{${e(b.full_name ?? "")}}}\\\\[1.5mm]
     ${b.headline ? `{\\Large \\textbf{${e(b.headline.toUpperCase())}}}\\\\[2mm]` : ""}
     \\small{
-        ${plain.join(" \\quad|\\quad ")}${links.length ? ` \\\\\n        ${links.join(" \\quad|\\quad ")}` : ""}
+        ${[plain.join(" \\quad|\\quad "), links.join(" \\quad|\\quad ")].filter(Boolean).join(" \\\\\n        ")}
     }
 \\end{minipage}
 ${
@@ -177,8 +179,8 @@ ${
 \\hfill
 \\begin{minipage}[t]{0.18\\textwidth}
     \\raggedleft
-    \\includegraphics[width=2.02cm]{qrcode.png}\\\\
-    \\scriptsize \\textbf{Portfolio QR Code}
+    \\IfFileExists{qrcode.png}{\\includegraphics[width=2.02cm]{qrcode.png}\\\\
+    \\scriptsize \\textbf{Portfolio QR Code}}{}
 \\end{minipage}
 `
     : ""

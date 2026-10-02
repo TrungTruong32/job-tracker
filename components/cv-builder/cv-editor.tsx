@@ -47,7 +47,13 @@ export function CvEditor({
   const [name, setName] = useState(doc.name)
   const [template, setTemplate] = useState<TemplateKey>(doc.template)
   const [style, setStyle] = useState<CvStyle>(() => clampStyle(doc.template, { ...TEMPLATES[doc.template].defaults, ...doc.style }))
-  const [content, setContent] = useState<CvContent>(doc.content)
+  const [content, setContent] = useState<CvContent>(() =>
+    ops.pruneMissing(doc.content, (id) => {
+      const it = items.find((i) => i.id === id)
+      if (!it) return null
+      return Array.isArray(it.data.bullets) ? (it.data.bullets as { id: string }[]).map((b) => b.id) : []
+    }),
+  )
   const [tab, setTab] = useState<"content" | "preview">("content")
   const [showStyle, setShowStyle] = useState(false)
   const [save, setSave] = useState<"saved" | "saving" | "error">("saved")
@@ -61,26 +67,41 @@ export function CvEditor({
   )
   const input: RenderInput = { cv: resolved, style, template, qrUrl }
   const { pages, fill, busy, error } = useCvRender(input)
-  const overflow = !!fill && fill.overflowPct > 0.0005
+  const overflow = !!fill && (fill.overflowPct > 0.0005 || pages.length > 1)
+  const measured = !!fill && !busy
 
-  // autosave
+  // autosave (debounced); a pending save is flushed when leaving the editor
+  const pending = useRef<Parameters<typeof updateCvDocument>[1] | null>(null)
   useEffect(() => {
     if (first.current) {
       first.current = false
       return
     }
+    const payload = { ...(name.trim() ? { name: name.trim() } : {}), template, style, content }
+    pending.current = payload
     setSave("saving")
     const t = setTimeout(async () => {
-      const res = await updateCvDocument(doc.id, { name, template, style, content })
+      pending.current = null
+      const res = await updateCvDocument(doc.id, payload)
       setSave(res.ok ? "saved" : "error")
       if (!res.ok) toast.error("Không lưu được", { description: res.error })
     }, 800)
     return () => clearTimeout(t)
   }, [doc.id, name, template, style, content])
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (pending.current) e.preventDefault()
+    }
+    window.addEventListener("beforeunload", warn)
+    return () => {
+      window.removeEventListener("beforeunload", warn)
+      if (pending.current) void updateCvDocument(doc.id, pending.current) // left via in-app navigation
+    }
+  }, [doc.id])
 
   function changeTemplate(t: TemplateKey) {
     setTemplate(t)
-    setStyle((s) => clampStyle(t, { ...TEMPLATES[t].defaults, accent: s.accent === TEMPLATES[template].defaults.accent ? TEMPLATES[t].defaults.accent : s.accent, qr_url: s.qr_url }))
+    setStyle((s) => clampStyle(t, { ...s, accent: s.accent === TEMPLATES[template].defaults.accent ? TEMPLATES[t].defaults.accent : s.accent }))
   }
 
   const bulletsOf = (id: string) => {
@@ -89,7 +110,7 @@ export function CvEditor({
   }
 
   function exportPdf() {
-    if (overflow && !confirm(`CV đang tràn ${Math.round(fill!.overflowPct * 100)}% sang trang 2. Vẫn xuất PDF 2 trang?`)) return
+    if (overflow && !confirm(`CV đang tràn sang trang 2. Vẫn xuất PDF ${Math.max(2, pages.length)} trang?`)) return
     startExport(async () => {
       try {
         download(await renderPdfBlob(input), `${fileSafe(basics.full_name ?? "CV")}_${fileSafe(name)}.pdf`)
@@ -140,7 +161,7 @@ export function CvEditor({
         <Link href="/cv" aria-label="Về trang CV" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-5" />
         </Link>
-        <Input aria-label="Tên bản CV" className="h-9 w-56 max-w-full font-semibold" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input aria-label="Tên bản CV" maxLength={80} className="h-9 w-56 max-w-full font-semibold" value={name} onChange={(e) => setName(e.target.value)} />
         <span className="text-xs text-muted-foreground" aria-live="polite">
           {save === "saving" ? "Đang lưu…" : save === "error" ? "Lỗi lưu" : (
             <span className="inline-flex items-center gap-1">
@@ -156,10 +177,10 @@ export function CvEditor({
         <Button size="sm" variant="outline" onClick={exportTex}>
           <FileCode2 /> .tex
         </Button>
-        <Button size="sm" variant="outline" onClick={exportPdf} disabled={exporting}>
+        <Button size="sm" variant="outline" onClick={exportPdf} disabled={exporting || !measured} title={measured ? undefined : "Đang đo số trang…"}>
           {exporting ? <Loader2 className="animate-spin" /> : <Download />} PDF
         </Button>
-        <Button size="sm" onClick={saveVersion} disabled={exporting}>
+        <Button size="sm" onClick={saveVersion} disabled={exporting || !measured} title={measured ? undefined : "Đang đo số trang…"}>
           <Save /> Lưu để nộp
         </Button>
       </div>

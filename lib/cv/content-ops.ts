@@ -45,6 +45,33 @@ export function moveSection(content: CvContent, key: CvSectionKey, dir: -1 | 1):
   return c
 }
 
+/** Move past hidden sections: swap with the nearest neighbour among `shown` (in document order). */
+export function moveSectionAmong(content: CvContent, key: CvSectionKey, dir: -1 | 1, shown: CvSectionKey[]): CvContent {
+  const c = clone(content)
+  const order = c.sections.map((s) => s.key).filter((k) => shown.includes(k))
+  const target = order[order.indexOf(key) + dir]
+  if (!target) return c
+  const i = c.sections.findIndex((s) => s.key === key)
+  const j = c.sections.findIndex((s) => s.key === target)
+  ;[c.sections[i], c.sections[j]] = [c.sections[j], c.sections[i]]
+  return c
+}
+
+/** Drop references to profile items/bullets that no longer exist. `bulletsOf` returns null for a deleted item. */
+export function pruneMissing(content: CvContent, bulletsOf: (itemId: string) => string[] | null): CvContent {
+  const c = clone(content)
+  for (const s of c.sections) {
+    s.items = s.items.flatMap((r) => {
+      const ids = bulletsOf(r.item_id)
+      if (!ids) return []
+      if (r.bullet_ids) r.bullet_ids = r.bullet_ids.filter((b) => ids.includes(b))
+      if (r.bullet_overrides) r.bullet_overrides = Object.fromEntries(Object.entries(r.bullet_overrides).filter(([b]) => ids.includes(b)))
+      return [r]
+    })
+  }
+  return c
+}
+
 export function toggleSection(content: CvContent, key: CvSectionKey, visible: boolean): CvContent {
   const c = clone(content)
   section(c, key).visible = visible
@@ -53,7 +80,7 @@ export function toggleSection(content: CvContent, key: CvSectionKey, visible: bo
 
 export function renameSection(content: CvContent, key: CvSectionKey, title: string): CvContent {
   const c = clone(content)
-  section(c, key).title = title.trim() || undefined
+  section(c, key).title = title // kept raw while typing; resolveCv trims and falls back to the default
   return c
 }
 

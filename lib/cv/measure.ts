@@ -20,12 +20,18 @@ export function computeFill(lines: { y: number; h: number }[], pageHeight: numbe
 export async function measurePdf(bytes: Uint8Array, bottomMarginPt: number): Promise<Fill> {
   const { getDocumentProxy } = await import("unpdf")
   const pdf = await getDocumentProxy(bytes)
-  const page = await pdf.getPage(1)
-  const { height } = page.getViewport({ scale: 1 })
-  const tc = await page.getTextContent()
-  const lines: { y: number; h: number }[] = []
-  for (const it of tc.items as { str?: string; transform?: number[]; height?: number }[]) {
-    if (it.str?.trim() && it.transform) lines.push({ y: it.transform[5], h: it.height ?? 10 })
+  try {
+    const page = await pdf.getPage(1)
+    const { height } = page.getViewport({ scale: 1 })
+    const tc = await page.getTextContent()
+    const lines: { y: number; h: number }[] = []
+    for (const it of tc.items as { str?: string; transform?: number[]; height?: number }[]) {
+      if (it.str?.trim() && it.transform) lines.push({ y: it.transform[5], h: it.height ?? 10 })
+    }
+    return computeFill(lines, height, bottomMarginPt)
+  } finally {
+    // free pdf.js memory: the editor measures after every change
+    const d = pdf as unknown as { destroy?: () => Promise<void>; cleanup?: () => Promise<void> }
+    await (d.destroy ?? d.cleanup)?.call(pdf)
   }
-  return computeFill(lines, height, bottomMarginPt)
 }

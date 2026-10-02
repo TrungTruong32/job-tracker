@@ -8,7 +8,7 @@ export default defineConfig({
     alias: { "server-only": fileURLToPath(new URL("./test/empty-module.ts", import.meta.url)) },
   },
   test: {
-    include: ["lib/**/*.test.ts"],
+    include: ["lib/**/*.test.ts", "lib/**/*.test.tsx"],
     environment: "node",
   },
 })

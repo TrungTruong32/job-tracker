@@ -139,7 +139,9 @@ export function ProfileView({ basics, items }: { basics: Basics; items: ProfileI
               <ul className="divide-y">
                 {list.map((it, idx) => {
                   const valid = safeItem(it.section, it.data)
-                  const bullets = Array.isArray(it.data.bullets) ? (it.data.bullets as { text: string }[]) : []
+                  const bullets = (Array.isArray(it.data.bullets) ? it.data.bullets : []).filter(
+                    (b): b is { text: string } => typeof (b as { text?: unknown })?.text === "string",
+                  )
                   return (
                     <li key={it.id} className="flex items-start gap-2 py-2">
                       <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing({ section: key, item: it })}>

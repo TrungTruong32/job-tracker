@@ -94,7 +94,11 @@ function FieldInput({ f, value, onChange }: { f: Field; value: string; onChange:
 function ItemForm({ section, item, tagSuggestions, onDone }: { section: Section; item?: ProfileItem; tagSuggestions: string[]; onDone: () => void }) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(section, item?.data ?? {}))
   const [bullets, setBullets] = useState<Bullet[]>(() =>
-    Array.isArray(item?.data.bullets) ? (item!.data.bullets as Bullet[]) : [{ id: crypto.randomUUID(), text: "" }],
+    Array.isArray(item?.data.bullets)
+      ? (item!.data.bullets as unknown[]).flatMap((b) =>
+          typeof (b as Bullet)?.text === "string" ? [{ id: (b as Bullet).id || crypto.randomUUID(), text: (b as Bullet).text }] : [],
+        )
+      : [{ id: crypto.randomUUID(), text: "" }],
   )
   const [tags, setTags] = useState((item?.tags ?? []).join(", "))
   const [pending, startTransition] = useTransition()

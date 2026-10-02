@@ -46,6 +46,17 @@ describe("toBullets", () => {
     expect(toBullets(["A", " ", { text: "B" }, { nope: 1 }]).map((x) => x.text)).toEqual(["A", "B"])
   })
 
+  it("does not eat numbers at the start of a bullet", () => {
+    expect(toBullets(["2.5x faster inference", "91.20% accuracy", "-30% cost", "3) third", "1. first", "- dash"]).map((x) => x.text)).toEqual([
+      "2.5x faster inference",
+      "91.20% accuracy",
+      "-30% cost",
+      "third",
+      "first",
+      "dash",
+    ])
+  })
+
   it("keeps existing ids", () => {
     expect(toBullets([{ id: "keep-me", text: "A" }])[0].id).toBe("keep-me")
   })
@@ -68,6 +79,18 @@ describe("normalizeParsed", () => {
     expect((r.items[0].data as { bullets: unknown[] }).bullets).toHaveLength(2)
     expect(r.items[1].data).toMatchObject({ category: "ML", items: ["PyTorch", "LangChain", "RAG"] })
     expect(r.dropped).toBe(2)
+  })
+
+  it("tolerates nulls and bad links in basics instead of dropping all of them", () => {
+    const r = normalizeParsed({
+      basics: { full_name: "A", email: "a@x.dev", summary: null, links: [{ label: null, url: "https://x.dev" }, { label: "bad", url: "" }, null] },
+      items: [],
+    })
+    expect(r.basics).toMatchObject({ full_name: "A", email: "a@x.dev", links: [{ label: "", url: "https://x.dev" }] })
+  })
+
+  it("does not read words that merely start like a month as dates", () => {
+    expect(normalizeMonth("Marketing 2024")).toBe("Marketing 2024")
   })
 
   it("survives junk", () => {

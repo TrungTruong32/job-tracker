@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-import { mergeData } from "@/lib/profile/dedupe"
-import { toBullets } from "@/lib/profile/normalize"
+import { buildImportWrites, cleanBasicsPatch } from "@/lib/profile/import"
 import { positionsForNew, swapPositions } from "@/lib/profile/positions"
 import { BasicsSchema, ItemDataSchemas, SECTION_KEYS, type Section } from "@/lib/profile/schema"
 import type { Json } from "@/lib/supabase/types"
@@ -114,7 +113,8 @@ export async function duplicateItem(id: string): Promise<ActionResult<{ id: stri
     if (error) throw error
     if (!src) throw new Error("Mục này không còn tồn tại. Tải lại trang.")
     const data = { ...(src.data as Record<string, unknown>) }
-    if (Array.isArray(data.bullets)) data.bullets = toBullets((data.bullets as { text: string }[]).map((b) => b.text)) // fresh ids
+    // fresh ids only — re-parsing the text could strip leading numbers
+    if (Array.isArray(data.bullets)) data.bullets = (data.bullets as { text: string }[]).map((b) => ({ ...b, id: crypto.randomUUID() }))
     return await createItem(src.section as Section, data, src.tags)
   } catch (e) {
     return fail(e)
@@ -137,7 +137,7 @@ export async function moveItem(id: string, section: Section, dir: -1 | 1): Promi
 }
 
 const ImportSchema = z.object({
-  basics: BasicsSchema.partial().default({}),
+  basics: z.record(z.string(), z.unknown()).default({}),
   rows: z
     .array(
       z.object({
@@ -147,7 +147,7 @@ const ImportSchema = z.object({
         matchId: uuid.nullable(),
       }),
     )
-    .max(300),
+    .max(500, "CV có quá nhiều mục (tối đa 500)"),
 })
 
 /**
@@ -163,29 +163,13 @@ export async function commitImport(input: z.input<typeof ImportSchema>): Promise
       .select("id, section, position, data")
       .eq("workspace_id", ws.id)
     if (error) throw error
-    const byId = new Map(existing.map((e) => [e.id, e]))
-
-    const inserts: { section: Section; position: number; data: Record<string, unknown>; tags: string[] }[] = []
-    const updates: { id: string; data: Record<string, unknown> }[] = []
-    for (const s of SECTION_KEYS) {
-      const adds = v.rows.filter((r) => r.section === s && r.action === "add")
-      const taken = existing.filter((e) => e.section === s).map((e) => e.position)
-      positionsForNew(s, taken, adds.length).forEach((position, i) =>
-        inserts.push({ section: s, position, data: validData(s, adds[i].data), tags: [] }),
-      )
-    }
-    for (const r of v.rows) {
-      if (r.action !== "merge" && r.action !== "overwrite") continue
-      const old = r.matchId ? byId.get(r.matchId) : undefined
-      if (!old || old.section !== r.section) throw new Error("Mục trùng đã thay đổi hoặc bị xoá. Tải lại trang rồi nhập lại.")
-      const next = r.action === "merge" ? mergeData(r.section, old.data as Record<string, unknown>, r.data) : r.data
-      updates.push({ id: old.id, data: validData(r.section, next) })
-    }
-
-    const basics = Object.fromEntries(Object.entries(v.basics).filter(([, val]) => val !== undefined && val !== ""))
+    const { inserts, updates } = buildImportWrites(
+      existing.map((e) => ({ ...e, section: e.section as Section, data: (e.data ?? {}) as Record<string, unknown> })),
+      v.rows,
+    )
     const { error: rpcErr } = await supabase.rpc("import_profile", {
       p_ws: ws.id,
-      p_basics: basics as Json,
+      p_basics: cleanBasicsPatch(v.basics) as Json,
       p_inserts: inserts as unknown as Json,
       p_updates: updates as unknown as Json,
     })

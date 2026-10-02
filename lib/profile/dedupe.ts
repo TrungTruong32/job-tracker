@@ -34,8 +34,11 @@ const TITLE_SIMILARITY = 0.6
 
 function isDuplicate(section: Section, a: Data, b: Data): boolean {
   switch (section) {
-    case "experience":
-      return same(a.company, b.company) && similarity(a.title, b.title) >= TITLE_SIMILARITY
+    case "experience": {
+      // a promotion at the same company is a separate role: different known start dates -> not a duplicate
+      const startsDiffer = typeof a.start === "string" && typeof b.start === "string" && a.start !== b.start
+      return same(a.company, b.company) && similarity(a.title, b.title) >= TITLE_SIMILARITY && !startsDiffer
+    }
     case "education":
       return same(a.school, b.school) && (!textKey(a.degree) || !textKey(b.degree) || same(a.degree, b.degree))
     case "project":
@@ -55,7 +58,7 @@ export function findDuplicate(section: Section, data: Data, existing: Existing[]
   return existing.find((e) => e.section === section && isDuplicate(section, e.data, data))?.id ?? null
 }
 
-const bulletKey = (t: string) => normalize(t).replace(/\s+/g, " ").trim()
+export const bulletKey = (t: string) => normalize(t).replace(/\s+/g, " ").trim()
 
 function newBullets(oldB: unknown, newB: unknown): Bullet[] {
   const have = new Set((Array.isArray(oldB) ? (oldB as Bullet[]) : []).map((x) => bulletKey(x.text)))

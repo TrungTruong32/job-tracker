@@ -30,6 +30,12 @@ describe("findDuplicate", () => {
     expect(findDuplicate("experience", { company: "VNG", title: "AI Engineer" }, existing)).toBeNull()
   })
 
+  it("treats a promotion (different start date) at the same company as a new role", () => {
+    const ex = [{ id: "e2", section: "experience" as const, data: { company: "FPT Software", title: "AI Engineer", start: "2022-01" } }]
+    expect(findDuplicate("experience", { company: "FPT Software Co., Ltd", title: "Senior AI Engineer", start: "2024-03" }, ex)).toBeNull()
+    expect(findDuplicate("experience", { company: "FPT Software", title: "AI Engineer", start: "2022-01" }, ex)).toBe("e2")
+  })
+
   it("matches education when degrees agree or one is missing", () => {
     expect(findDuplicate("education", { school: "hcmus", degree: "" }, existing)).toBe("u1")
     expect(findDuplicate("education", { school: "HCMUS", degree: "MSc" }, existing)).toBeNull()

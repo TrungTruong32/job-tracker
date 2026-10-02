@@ -1,8 +1,11 @@
 import { BasicsSchema, ItemDataSchemas, SECTION_KEYS, type Basics, type Bullet, type Section } from "./schema"
 
-const MONTHS: Record<string, number> = {
-  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
-}
+const MONTH_NAMES = [
+  ["jan", "january"], ["feb", "february"], ["mar", "march"], ["apr", "april"], ["may"], ["jun", "june"],
+  ["jul", "july"], ["aug", "august"], ["sep", "sept", "september"], ["oct", "october"], ["nov", "november"], ["dec", "december"],
+]
+// whole month words only, so "Marketing 2024" is not read as March
+const MONTHS: Record<string, number> = Object.fromEntries(MONTH_NAMES.flatMap((names, i) => names.map((n) => [n, i + 1])))
 const pad = (m: number) => String(m).padStart(2, "0")
 const ok = (y: number, m: number) => y >= 1950 && y <= 2100 && m >= 1 && m <= 12
 
@@ -13,7 +16,7 @@ export function normalizeMonth(raw: unknown): string | null {
   let m: RegExpExecArray | null
   if ((m = /^(\d{4})[-/.](\d{1,2})$/.exec(t)) && ok(+m[1], +m[2])) return `${m[1]}-${pad(+m[2])}`
   if ((m = /^(\d{1,2})[-/.](\d{4})$/.exec(t)) && ok(+m[2], +m[1])) return `${m[2]}-${pad(+m[1])}`
-  if ((m = /^([a-z]{3})[a-z]*\.?\s+(\d{4})$/i.exec(t)) && MONTHS[m[1].toLowerCase()]) {
+  if ((m = /^([a-z]+)\.?\s+(\d{4})$/i.exec(t)) && MONTHS[m[1].toLowerCase()] && ok(+m[2], 1)) {
     return `${m[2]}-${pad(MONTHS[m[1].toLowerCase()])}`
   }
   if ((m = /^th[aá]ng\s+(\d{1,2})[\s,/]+(\d{4})$/i.exec(t)) && ok(+m[2], +m[1])) return `${m[2]}-${pad(+m[1])}`
@@ -45,7 +48,8 @@ export function toBullets(raw: unknown): Bullet[] {
     }
   }
   return parts
-    .map((p) => ({ id: p.id || newId(), text: p.text.replace(/^\s*(?:[•\-*–·]|\d+[.)])\s*/, "").trim() }))
+    // list markers need a following space ("- a", "1. a"), so "-30% cost" and "2.5x" survive
+    .map((p) => ({ id: p.id || newId(), text: p.text.replace(/^\s*(?:[•–·▪●]\s*|[-*]\s+|\d{1,2}[.)]\s+)/, "").trim() }))
     .filter((b) => b.text)
 }
 
@@ -78,14 +82,20 @@ export type ParsedItem = { section: Section; data: Record<string, unknown> }
 /** Clean up an AI `parse_cv` result; items that don't fit their schema are dropped and counted. */
 export function normalizeParsed(raw: unknown): { basics: Basics; items: ParsedItem[]; dropped: number } {
   const obj = (raw && typeof raw === "object" ? raw : {}) as { basics?: unknown; items?: unknown }
-  const b = BasicsSchema.safeParse(
-    Object.fromEntries(
-      Object.entries((obj.basics && typeof obj.basics === "object" ? obj.basics : {}) as Record<string, unknown>).map(([k, v]) => [
-        k,
-        typeof v === "string" ? v.trim() || undefined : v,
-      ]),
+  const rawBasics = (obj.basics && typeof obj.basics === "object" ? obj.basics : {}) as Record<string, unknown>
+  const links = (Array.isArray(rawBasics.links) ? rawBasics.links : [])
+    .filter((l): l is Record<string, unknown> => !!l && typeof l === "object")
+    .map((l) => ({ label: typeof l.label === "string" ? l.label.trim() : "", url: typeof l.url === "string" ? l.url.trim() : "" }))
+    .filter((l) => l.url)
+  // one null / bad field must not throw the whole basics block away
+  const b = BasicsSchema.safeParse({
+    ...Object.fromEntries(
+      Object.entries(rawBasics)
+        .filter(([k]) => k !== "links")
+        .map(([k, v]) => [k, typeof v === "string" ? v.trim() || undefined : undefined]),
     ),
-  )
+    links,
+  })
   const basics = b.success ? b.data : ({ links: [] } as Basics)
   const items: ParsedItem[] = []
   let dropped = 0

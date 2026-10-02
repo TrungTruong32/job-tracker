@@ -38,6 +38,7 @@ export function BulletEditor({ value, onChange }: { value: Bullet[]; onChange: (
               value={b.text}
               onChange={(e) => set(i, e.target.value)}
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return // Vietnamese IME still composing
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault()
                   const fresh = { id: crypto.randomUUID(), text: "" }

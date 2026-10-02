@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { ProfileItem } from "@/lib/profile/schema"
 import { contentFromTags, resolveCv, type CvContent } from "./resolve"
-import { containsTerm, jdHash, profileHits, scoreCv, tokens, type Keyword } from "./score"
+import { containsTerm, jdHash, keywordMatches, profileHits, scoreCv, tokens, verifySuggestion, type Keyword } from "./score"
 
 const kw = (term: string, weight: Keyword["weight"] = "required", aliases: string[] = []): Keyword => ({ term, aliases, weight, category: "x" })
 
@@ -20,6 +20,37 @@ describe("matching", () => {
     expect(has("Deployed microservices", "microservice")).toBe(true)
     expect(has("Built an API", "APIs")).toBe(true)
     expect(has("large language models in production", "large language model")).toBe(true)
+  })
+})
+
+describe("matching on real-world spellings", () => {
+  const m = (text: string, term: string, aliases: string[] = []) => keywordMatches(text, kw(term, "required", aliases))
+  it("avoids false positives on short terms", () => {
+    expect(m("Led R&D for the lab", "R")).toBe(false)
+    expect(m("Statistics in R and Python", "R")).toBe(true)
+    expect(m("It goes well", "Go")).toBe(false)
+    expect(m("AIs everywhere", "AI")).toBe(false)
+  })
+  it("matches common variants without AI-provided aliases", () => {
+    expect(m("Built UIs in React.js", "React")).toBe(true)
+    expect(m("APIs in NodeJS", "Node.js")).toBe(true)
+    expect(m("Next.js app", "Next")).toBe(true)
+    expect(m("LLM finetuning", "fine-tuning")).toBe(true)
+    expect(m("Set up CICD", "CI/CD")).toBe(true)
+    expect(m("Ran A/B tests", "AB testing")).toBe(false)
+    expect(m("Ran AB testing", "A/B testing")).toBe(true)
+    expect(m("Services in Golang", "Go")).toBe(true)
+    expect(m("Deployed on Amazon Web Services", "AWS")).toBe(true)
+    expect(m("React/Next stack", "React")).toBe(true)
+  })
+})
+
+describe("verifySuggestion", () => {
+  const keys = [kw("LangChain"), kw("RAG")]
+  it("flags new numbers and computes the keywords actually added", () => {
+    expect(verifySuggestion("Built a RAG bot", "Built a RAG bot with LangChain", keys)).toEqual({ newNumbers: [], added: ["LangChain"] })
+    expect(verifySuggestion("Built a RAG bot", "Built a RAG bot serving 10K users", keys).newNumbers).toEqual(["10K"])
+    expect(verifySuggestion("Cut cost 40%", "Cut cost by 40%", keys).newNumbers).toEqual([])
   })
 })
 
@@ -69,13 +100,13 @@ describe("scoreCv", () => {
 
   it("computes the 60/20/20 score", () => {
     const r = scoreCv(cv(), keywords, { onePage: true })
-    // required: RAG 1 + LangChain 1 + PyTorch .7 + K8s 0 + LLM .7 = 3.4 / 5 -> 40.8
-    expect(r.parts.required.score).toBeCloseTo(40.8, 1)
+    // required: RAG 1 + LangChain 1 + PyTorch .7 + K8s 0 + LLM .7 = 3.4 / 5 -> 40.8 -> 41
+    expect(r.parts.required.score).toBe(41)
     // preferred: Docker 1 + Terraform 0 -> 10
     expect(r.parts.preferred.score).toBe(10)
     // format: one page ✓, quantified 1/2 bullets ✓ (50%), summary has RAG+LangChain ✓, no long bullet ✓
     expect(r.parts.format.score).toBe(20)
-    expect(r.total).toBe(71)
+    expect(r.total).toBe(71) // 41 + 10 + 20
   })
 
   it("moves the preferred points to required when the JD has no preferred keywords", () => {
@@ -83,6 +114,17 @@ describe("scoreCv", () => {
     expect(r.parts.required.max).toBe(80)
     expect(r.parts.required.score).toBe(40)
     expect(r.parts.format.checks.find((c) => c.key === "one_page")!.ok).toBe(false)
+  })
+
+  it("gives preferred keywords the full 80 when the JD lists no required ones", () => {
+    const r = scoreCv(cv(), [kw("RAG", "preferred"), kw("LangChain", "preferred")], { onePage: true })
+    expect(r.parts.preferred.max).toBe(80)
+    expect(r.total).toBeGreaterThan(90)
+  })
+
+  it("total equals the sum of the rounded parts", () => {
+    const r = scoreCv(cv(), [kw("RAG"), kw("PyTorch"), kw("Kubernetes"), kw("Docker", "preferred"), kw("x1", "preferred"), kw("x2", "preferred")], { onePage: true })
+    expect(r.total).toBe(r.parts.required.score + r.parts.preferred.score + r.parts.format.score)
   })
 
   it("scores format only (scaled) when there are no keywords yet", () => {

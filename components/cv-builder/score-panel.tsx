@@ -11,14 +11,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { describeChainResult, runAiTask } from "@/lib/ai/browser"
 import { plainText } from "@/lib/cv/inline"
 import type { CvContent, ResolvedCv } from "@/lib/cv/resolve"
-import { jdHash, profileHits, scoreCv, type KeywordHit, type ProfileHit, type Where } from "@/lib/cv/score"
+import { jdHash, profileHits, scoreCv, verifySuggestion, type KeywordHit, type ProfileHit, type Where } from "@/lib/cv/score"
 import type { JdKeywords } from "@/lib/data/cv-documents"
 import type { PublicSettings } from "@/lib/data/types"
 import type { ProfileItem } from "@/lib/profile/schema"
 import { cn } from "@/lib/utils"
 
 export type ScoreApp = { id: string; label: string; jd_text: string | null; jd_summary: string | null }
-type Suggestion = { kind: "bullet" | "summary"; item_id?: string; bullet_id?: string; old: string; text: string; reason: string; keywords: string[] }
+type Suggestion = { kind: "bullet" | "summary"; item_id?: string; bullet_id?: string; old: string; text: string; reason: string; keywords: string[]; newNumbers: string[] }
 
 const COLOR: Record<KeywordHit["found"], string> = {
   evidence: "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
@@ -62,8 +62,10 @@ export function ScorePanel({
   const [busy, setBusy] = useState<"kw" | "ai" | null>(null)
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null)
   const app = apps.find((a) => a.id === targetAppId) ?? null
+  const summaryVisible = resolved.sections.some((s) => s.key === "summary")
   const jd = (app ? app.jd_text : targetJd) ?? ""
   const stale = !!keywords && !!jd.trim() && keywords.jd_hash !== jdHash(jd)
+  const current = !!keywords && !stale && jd.trim().length >= 30 // the score belongs to the JD on screen
   const score = useMemo(() => scoreCv(resolved, keywords?.keywords ?? [], { onePage }), [resolved, keywords, onePage])
   const groups = useMemo(() => {
     const m = new Map<string, KeywordHit[]>()
@@ -102,15 +104,21 @@ export function ScorePanel({
         missing: score.hits.filter((h) => h.found === "missing").map((h) => h.keyword.term),
         weak: score.hits.filter((h) => h.found === "skills").map((h) => h.keyword.term),
         bullets: bullets.map(({ id, text }) => ({ id, text })),
-        summary: resolved.basics.summary || undefined,
+        summary: summaryVisible ? resolved.basics.summary || undefined : undefined,
       })
       const byId = new Map(bullets.map((b) => [b.id, b]))
+      const kws = keywords?.keywords ?? []
       const list: Suggestion[] = r.data.bullets.flatMap((s) => {
         const b = byId.get(s.id)
-        return b && s.text.trim() !== b.text.trim() ? [{ kind: "bullet" as const, item_id: b.item_id, bullet_id: b.id, old: b.text, text: s.text.trim(), reason: s.reason, keywords: s.keywords }] : []
+        if (!b || s.text.trim() === b.text.trim()) return []
+        // never trust the model's own claims: recompute added keywords, flag invented numbers
+        const v = verifySuggestion(b.text, s.text, kws)
+        return [{ kind: "bullet" as const, item_id: b.item_id, bullet_id: b.id, old: b.text, text: s.text.trim(), reason: s.reason, keywords: v.added, newNumbers: v.newNumbers }]
       })
-      if (r.data.summary?.text && resolved.basics.summary && r.data.summary.text.trim() !== resolved.basics.summary.trim())
-        list.unshift({ kind: "summary", old: resolved.basics.summary, text: r.data.summary.text.trim(), reason: r.data.summary.reason, keywords: [] })
+      if (summaryVisible && r.data.summary?.text && resolved.basics.summary && r.data.summary.text.trim() !== resolved.basics.summary.trim()) {
+        const v = verifySuggestion(resolved.basics.summary, r.data.summary.text, kws)
+        list.unshift({ kind: "summary", old: resolved.basics.summary, text: r.data.summary.text.trim(), reason: r.data.summary.reason, keywords: v.added, newNumbers: v.newNumbers })
+      }
       setSuggestions(list)
       const fb = describeChainResult(r)
       if (fb) toast.info(fb)
@@ -159,14 +167,19 @@ export function ScorePanel({
             <span className="text-xs text-muted-foreground">AI đọc JD một lần để lấy keyword; điểm sau đó tính ngay khi bạn sửa CV.</span>
           </div>
         )}
-        {keywords && !stale && (
+        {current && keywords && (
           <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" onClick={analyze} disabled={!!busy}>
             <RefreshCw className="size-3" /> Phân tích lại ({keywords.keywords.length} keyword)
           </button>
         )}
       </section>
 
-      {keywords && (
+      {keywords && !current && (
+        <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+          {jd.trim().length < 30 ? "Chọn đơn ứng tuyển có JD hoặc dán JD để chấm điểm." : "JD đã thay đổi — bấm “Phân tích lại” để chấm theo JD này."}
+        </p>
+      )}
+      {current && keywords && (
         <>
           <section className="space-y-3 rounded-xl border bg-card p-3">
             <div className="flex items-center gap-4">
@@ -216,8 +229,8 @@ export function ScorePanel({
               <div key={cat} className="space-y-1.5">
                 <h3 className="text-xs font-medium text-muted-foreground">{cat}</h3>
                 <ul className="flex flex-wrap gap-1.5">
-                  {list.map((h) => (
-                    <li key={h.keyword.term}>
+                  {list.map((h, i) => (
+                    <li key={h.keyword.term + i}>
                       <button
                         type="button"
                         className={cn("rounded-full border px-2 py-0.5 text-xs", COLOR[h.found], h.keyword.weight === "required" && "font-semibold")}
@@ -254,6 +267,11 @@ export function ScorePanel({
                   <InlinePreview text={s.text} />
                 </p>
                 {s.keywords.length > 0 && <p className="text-xs text-emerald-700 dark:text-emerald-300">+ {s.keywords.join(", ")}</p>}
+                {s.newNumbers.length > 0 && (
+                  <p className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-800 dark:text-amber-200" role="alert">
+                    ⚠ AI thêm số liệu không có trong câu gốc: {s.newNumbers.join(", ")} — chỉ áp dụng nếu đúng sự thật.
+                  </p>
+                )}
                 <div className="flex gap-1.5">
                   <Button size="xs" onClick={() => apply(s)}>
                     Áp dụng

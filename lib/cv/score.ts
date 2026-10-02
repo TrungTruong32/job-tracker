@@ -27,13 +27,45 @@ export function tokens(s: string): string[] {
     .replace(/đ/g, "d")
     .replace(/Đ/g, "d")
     .toLowerCase()
+    // short pairs are one term: CI/CD, A/B, R&D, Q&A (so "R" does not match "R&D")
+    .replace(/(?<![a-z0-9])([a-z0-9]{1,3})[/&]([a-z0-9]{1,3})(?![a-z0-9])/g, "$1$2")
+    // hyphenated compounds: fine-tuning == finetuning, GPT-4 == gpt4
+    .replace(/([a-z0-9])-(?=[a-z0-9])/g, "$1")
     .replace(/[^a-z0-9+#.\s]/g, " ")
     .replace(/\.(?![a-z0-9])/g, " ") // sentence dots, not "node.js" / ".net"
     .replace(/(^|[^a-z0-9])[+#]+/g, "$1 ") // stray + / #
-  return t.split(/\s+/).filter(Boolean)
+  return t
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.replace(/\.js$/, "").replace(/^([a-z]{3,})js$/, "$1")) // React.js / NodeJS == React / Node
 }
 
-const tokEq = (a: string, b: string) => a === b || a + "s" === b || b + "s" === a || a + "es" === b || b + "es" === a
+// plural folding only for real words (so "go" != "goes", "ai" != "ais")
+const tokEq = (a: string, b: string) =>
+  a === b || (a.length >= 3 && b.length >= 3 && (a + "s" === b || b + "s" === a || a + "es" === b || b + "es" === a))
+
+// common equivalents, so matching does not depend on the AI remembering every alias
+const BUILTIN_ALIASES: Record<string, string[]> = {
+  go: ["golang"],
+  golang: ["go"],
+  aws: ["amazon web services"],
+  "amazon web services": ["aws"],
+  gcp: ["google cloud", "google cloud platform"],
+  k8s: ["kubernetes"],
+  kubernetes: ["k8s"],
+  js: ["javascript"],
+  javascript: ["js"],
+  ts: ["typescript"],
+  typescript: ["ts"],
+  ml: ["machine learning"],
+  "machine learning": ["ml"],
+  llm: ["large language model"],
+  "large language model": ["llm"],
+  nlp: ["natural language processing"],
+  "natural language processing": ["nlp"],
+  postgres: ["postgresql"],
+  postgresql: ["postgres"],
+}
 
 export function containsTerm(hay: string[], term: string[]): boolean {
   if (!term.length) return false
@@ -44,10 +76,26 @@ export function containsTerm(hay: string[], term: string[]): boolean {
   return false
 }
 
-const termsOf = (k: Keyword) => [k.term, ...k.aliases].map(tokens).filter((t) => t.length)
+const termsOf = (k: Keyword) => {
+  const base = [k.term, ...k.aliases]
+  const extra = base.flatMap((t) => BUILTIN_ALIASES[tokens(t).join(" ")] ?? [])
+  return [...base, ...extra].map(tokens).filter((t) => t.length)
+}
 const matches = (text: string, k: Keyword) => {
   const hay = tokens(text)
   return termsOf(k).some((t) => containsTerm(hay, t))
+}
+export const keywordMatches = matches
+
+const NUMBER = /\d[\d.,]*\s*(?:%|[kKmMbB]\b|\+|x\b|×)?/g
+const numberKey = (n: string) => n.replace(/\s+/g, "").replace(/,/g, "").toLowerCase()
+
+/** Truthfulness check for an AI rewrite: numbers it introduced, and JD keywords it really added. */
+export function verifySuggestion(oldText: string, newText: string, keywords: Keyword[]): { newNumbers: string[]; added: string[] } {
+  const had = new Set((plainText(oldText).match(NUMBER) ?? []).map(numberKey))
+  const newNumbers = (plainText(newText).match(NUMBER) ?? []).map((n) => n.trim()).filter((n) => !had.has(numberKey(n)))
+  const added = keywords.filter((k) => matches(plainText(newText), k) && !matches(plainText(oldText), k)).map((k) => k.term)
+  return { newNumbers, added }
 }
 
 /** FNV-1a over the normalized JD: tells when the JD changed since keywords were extracted. */
@@ -89,10 +137,11 @@ export function scoreCv(cv: ResolvedCv, keywords: Keyword[], opts: { onePage: bo
   const credit = (h: KeywordHit) => (h.found === "evidence" ? 1 : h.found === "skills" ? 0.7 : 0)
   const req = hits.filter((h) => h.keyword.weight === "required")
   const pref = hits.filter((h) => h.keyword.weight === "preferred")
-  const reqMax = keywords.length ? (pref.length ? 60 : 80) : 0
-  const prefMax = pref.length ? 20 : 0
+  // 80 keyword points shared 60/20; all to one kind when the JD only has that kind
+  const reqMax = req.length ? (pref.length ? 60 : 80) : 0
+  const prefMax = pref.length ? (req.length ? 20 : 80) : 0
   const part = (list: KeywordHit[], max: number) => ({
-    score: list.length ? (max * list.reduce((n, h) => n + credit(h), 0)) / list.length : 0,
+    score: list.length ? Math.round((max * list.reduce((n, h) => n + credit(h), 0)) / list.length) : 0,
     max,
     matched: list.filter((h) => h.found !== "missing").length,
     count: list.length,
@@ -105,14 +154,19 @@ export function scoreCv(cv: ResolvedCv, keywords: Keyword[], opts: { onePage: bo
   const checks: FormatCheck[] = [
     { key: "one_page", label: "Vừa 1 trang A4", ok: opts.onePage },
     { key: "quantified", label: `≥ 50% bullet có số liệu (${quantified}/${bullets.length})`, ok: bullets.length > 0 && quantified / bullets.length >= 0.5 },
-    { key: "summary_keywords", label: `Summary chứa ≥ ${needInSummary || 2} keyword bắt buộc`, ok: req.filter((h) => matches(summary, h.keyword)).length >= needInSummary },
+    {
+      key: "summary_keywords",
+      label: needInSummary ? `Summary chứa ≥ ${needInSummary} keyword bắt buộc` : "Summary (JD không có keyword bắt buộc)",
+      ok: req.filter((h) => matches(summary, h.keyword)).length >= needInSummary,
+    },
     { key: "bullet_length", label: `Không bullet nào dài quá ${LONG_BULLET} ký tự (~2 dòng)`, ok: bullets.every((b) => b.length <= LONG_BULLET) },
   ]
   const format = { score: checks.filter((c) => c.ok).length * 5, max: 20, checks }
   const required = part(req, reqMax)
   const preferred = part(pref, prefMax)
-  const total = keywords.length ? Math.round(required.score + preferred.score + format.score) : format.score * 5
-  return { total, parts: { required: { ...required, score: Math.round(required.score * 10) / 10 }, preferred, format }, hits }
+  // parts are already integers, so the total always equals what the breakdown shows
+  const total = keywords.length ? required.score + preferred.score + format.score : format.score * 5
+  return { total, parts: { required, preferred, format }, hits }
 }
 
 export type ProfileHit = { kind: "bullet" | "item"; section: Section; item_id: string; bullet_id?: string; label: string }

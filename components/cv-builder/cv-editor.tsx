@@ -281,7 +281,7 @@ export function CvEditor({
               resolved={resolved}
               content={content}
               items={items}
-              onePage={!!fill && !overflow}
+              onePage={!fill || !overflow} // not measured yet: don't penalize
               settings={settings}
               apps={apps}
               targetAppId={targetAppId}
@@ -294,13 +294,14 @@ export function CvEditor({
               onKeywords={setKeywords}
               onAddFromProfile={(h) => {
                 const c = h.kind === "bullet" ? ops.toggleBullet(content, h.section, h.item_id, h.bullet_id!, true, bulletsOf(h.item_id)) : ops.toggleEntry(content, h.section, h.item_id, true)
-                setContent(c)
+                setContent(ops.toggleSection(c, h.section, true)) // a hidden section would swallow it
                 toast.success("Đã thêm vào bản CV", { description: h.label })
               }}
               onApplyBullet={(itemId, bulletId, text) => {
                 const sec = content.sections.find((s) => s.items.some((i) => i.item_id === itemId))
                 const orig = (items.find((i) => i.id === itemId)?.data.bullets as { id: string; text: string }[] | undefined)?.find((b) => b.id === bulletId)?.text ?? ""
-                if (sec) setContent(ops.setBulletOverride(content, sec.key, itemId, bulletId, text, orig))
+                if (!sec) return void toast.error("Mục này đã bị bỏ khỏi bản CV, không áp dụng được gợi ý")
+                setContent(ops.setBulletOverride(content, sec.key, itemId, bulletId, text, orig))
               }}
               onApplySummary={(text) => setContent({ ...ops.toggleSection(content, "summary", true), summary_override: text })}
               onFocus={(w) => {

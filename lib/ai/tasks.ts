@@ -48,9 +48,16 @@ export const AI_TASKS = {
         .array(
           z.object({
             term: z.string().trim().min(1).max(60),
-            aliases: z.preprocess((v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()) : []), z.array(z.string())),
-            weight: z.preprocess((v) => (v === "required" ? "required" : "preferred"), z.enum(["required", "preferred"])),
-            category: z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : "Khác"), z.string()),
+            // clamped to what updateCvDocument accepts, so a chatty model cannot block autosave
+            aliases: z.preprocess(
+              (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()).slice(0, 10).map((x: string) => x.trim().slice(0, 60)) : []),
+              z.array(z.string()),
+            ),
+            weight: z.preprocess(
+              (v) => (typeof v === "string" && /required|must|mandatory|essential|core/i.test(v) ? "required" : "preferred"),
+              z.enum(["required", "preferred"]),
+            ),
+            category: z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 40) : "Khác"), z.string()),
           }),
         )
         .max(60),

@@ -17,6 +17,8 @@ const TagsSchema = z.array(z.string().trim().toLowerCase().min(1).max(30)).max(2
 
 function fail(e: unknown): { ok: false; error: string } {
   if (e instanceof z.ZodError) return { ok: false, error: `Dữ liệu chưa hợp lệ: ${e.issues[0]?.path.join(".")} ${e.issues[0]?.message ?? ""}`.trim() }
+  if ((e as { code?: string })?.code === "23503")
+    return { ok: false, error: "Đơn ứng tuyển hoặc bản CV này không thuộc workspace hiện tại (có thể bạn vừa đổi workspace). Tải lại trang." }
   return { ok: false, error: (e as { message?: string })?.message || "Có lỗi xảy ra" }
 }
 

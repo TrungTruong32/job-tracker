@@ -12,6 +12,20 @@ describe("extract_keywords", () => {
     })
     expect(out.keywords[1]).toEqual({ term: "K8s", aliases: [], weight: "preferred", category: "Khác" })
   })
+
+  it("normalizes weights and clamps aliases/categories to what can be saved", () => {
+    const out = AI_TASKS.extract_keywords.output.parse({
+      keywords: [
+        { term: "A", aliases: Array.from({ length: 15 }, (_, i) => "alias" + i + "x".repeat(80)), weight: "Must-have", category: "C".repeat(80) },
+        { term: "B", weight: "REQUIRED" },
+        { term: "C", weight: "mandatory" },
+      ],
+    })
+    expect(out.keywords.map((k) => k.weight)).toEqual(["required", "required", "required"])
+    expect(out.keywords[0].aliases).toHaveLength(10)
+    expect(out.keywords[0].aliases[0].length).toBeLessThanOrEqual(60)
+    expect(out.keywords[0].category!.length).toBeLessThanOrEqual(40)
+  })
 })
 
 describe("suggest_edits", () => {

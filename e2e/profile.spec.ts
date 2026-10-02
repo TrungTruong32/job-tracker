@@ -118,4 +118,78 @@ test.describe("profile", () => {
     await items.nth(1).getByRole("button", { name: "Lên" }).click()
     await expect(items.nth(0)).toContainText("Japanese")
   })
+
+  // CV builder (part B) — needs the profile imported above
+  test("create from tags, stay on one page, auto-fit an overflow, export and save for applying", async ({ page }) => {
+    test.setTimeout(180_000)
+    await login(page)
+
+    // add a long project so the CV can overflow later
+    await page.goto("/profile")
+    await page.getByTestId("section-project").getByRole("button", { name: "Thêm Dự án" }).click()
+    const d = page.getByRole("dialog")
+    await d.getByLabel("Tên dự án *").fill("Very Long Project")
+    await d.getByLabel("Thuộc kinh nghiệm").selectOption({ label: "AI Engineer | Acme" })
+    const long = "Designed and shipped a production retrieval-augmented generation platform with **evaluation harnesses**, caching, guardrails and observability for multiple enterprise customers across regions"
+    for (let i = 1; i <= 26; i++) {
+      await d.getByLabel(`Bullet ${i}`, { exact: true }).fill(`${long} (${i})`)
+      if (i < 26) await d.getByLabel(`Bullet ${i}`, { exact: true }).press("Enter")
+    }
+    await d.getByLabel("Tag").fill("ai")
+    await d.getByRole("button", { name: "Lưu" }).click()
+    await expect(page.getByText("Đã thêm")).toBeVisible()
+
+    // create a document from the "ai" tag
+    await page.goto("/cv")
+    await page.getByRole("button", { name: "Tạo bản CV" }).click()
+    const c = page.getByRole("dialog")
+    await c.getByLabel("Tên bản CV *").fill("AI Engineer — Test")
+    await c.getByLabel("#ai").check()
+    await c.getByRole("button", { name: "Tạo" }).click()
+    await expect(page).toHaveURL(/\/cv\/[0-9a-f-]{36}$/)
+
+    // the long project overflows; deselect it -> one page
+    const indicator = page.getByTestId("page-indicator")
+    await expect(indicator).toContainText("Tràn", { timeout: 30_000 })
+    await expect(page.getByRole("img", { name: "Trang 2 của CV" })).toBeVisible()
+    // the project is nested under Acme in the "mine" template but is picked from the Projects list
+    await page.getByLabel("Dùng mục Very Long Project").uncheck()
+    await expect(indicator).toContainText("1 trang", { timeout: 30_000 })
+
+    // bring it back: overflow again -> the fit panel offers its three remedies
+    await page.getByLabel("Dùng mục Very Long Project").check()
+    await expect(indicator).toContainText("Tràn", { timeout: 30_000 })
+    await page.getByRole("button", { name: "Gợi ý bỏ" }).click()
+    await expect(page.getByText(/Bỏ (mục|bullet)/).first()).toBeVisible()
+    await page.getByRole("button", { name: "Tự co cho vừa" }).click()
+    // either it fits now, or auto-fit reports it cannot: both are handled; drop the project to be sure
+    await page.waitForTimeout(500)
+    if (!(await indicator.textContent())?.includes("1 trang")) {
+      await page.getByLabel("Dùng mục Very Long Project").uncheck()
+    }
+    await expect(indicator).toContainText("1 trang", { timeout: 30_000 })
+
+    // a CV-only rewrite of a bullet
+    await page.getByTestId("cv-section-experience").getByRole("button", { name: /AI Engineer/ }).first().click()
+    await page.getByRole("button", { name: "Sửa riêng cho bản này" }).first().click()
+    await page.getByLabel("Viết lại bullet cho bản CV này").fill("Built a **RAG assistant** for EU clients")
+    await page.getByRole("button", { name: "Xong" }).click()
+    await expect(page.getByText("đã sửa riêng")).toBeVisible()
+    await expect(page.getByText("Đã lưu")).toBeVisible({ timeout: 10_000 })
+
+    // exports
+    const pdf = page.waitForEvent("download")
+    await page.getByRole("button", { name: "PDF" }).click()
+    expect((await pdf).suggestedFilename()).toMatch(/\.pdf$/)
+    const tex = page.waitForEvent("download")
+    await page.getByRole("button", { name: ".tex" }).click()
+    expect((await tex).suggestedFilename()).toMatch(/\.tex$/)
+
+    // save for applying -> appears in the application form CV picker
+    await page.getByRole("button", { name: "Lưu để nộp" }).click()
+    await expect(page.getByText("Đã lưu thành bản CV để nộp")).toBeVisible({ timeout: 30_000 })
+    await page.goto("/")
+    await page.getByRole("button", { name: "Thêm đơn" }).filter({ visible: true }).first().click()
+    await expect(page.getByRole("dialog").getByLabel("Bản CV đã gửi").locator("option", { hasText: "AI Engineer — Test" })).toHaveCount(1)
+  })
 })

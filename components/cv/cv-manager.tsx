@@ -99,10 +99,10 @@ export function CvManager({ cvs, usage, workspaceId }: { cvs: CvVersion[]; usage
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold sm:text-2xl">Các phiên bản CV</h1>
+          <h2 className="text-lg font-semibold">File CV đã upload / đã lưu để nộp</h2>
           <p className="text-sm text-muted-foreground">Upload file .pdf hoặc .tex — AI dùng phần text để so với JD.</p>
         </div>
         <div className="flex gap-2">

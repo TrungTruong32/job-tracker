@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Columns3, Plus, Rows3 } from "lucide-react"
 import { toast } from "sonner"
@@ -10,13 +10,14 @@ import { Button } from "@/components/ui/button"
 import { moveApplication } from "@/lib/data/actions"
 import type { Application, CvVersion, PublicSettings, Stage } from "@/lib/data/types"
 import { getTodayItems } from "@/lib/followup"
+import { useStoredChoice } from "@/lib/use-stored-choice"
 import { cn } from "@/lib/utils"
 import { Kanban } from "./kanban"
 import { TableView } from "./table-view"
 import { TodayPanel } from "./today-panel"
 
-type View = "kanban" | "table"
-const VIEW_KEY = "jt:view"
+const VIEWS = ["kanban", "table"] as const
+type View = (typeof VIEWS)[number]
 
 export function Board({
   initialApps,
@@ -30,26 +31,17 @@ export function Board({
   settings: PublicSettings
 }) {
   const [apps, setApps] = useState(initialApps)
-  const [view, setView] = useState<View>("kanban")
+  const [prevInitial, setPrevInitial] = useState(initialApps)
+  if (prevInitial !== initialApps) {
+    // fresh server data (after a mutation / refresh) replaces local optimistic state
+    setPrevInitial(initialApps)
+    setApps(initialApps)
+  }
+  const [view, changeView] = useStoredChoice<View>("jt:view", VIEWS, "kanban")
   const [adding, setAdding] = useState(false)
   const [, startTransition] = useTransition()
   const router = useRouter()
   const today = useMemo(() => new Date(), [])
-
-  useEffect(() => setApps(initialApps), [initialApps])
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem(VIEW_KEY)
-      if (v === "kanban" || v === "table") setView(v)
-    } catch {}
-  }, [])
-
-  function changeView(v: View) {
-    setView(v)
-    try {
-      localStorage.setItem(VIEW_KEY, v)
-    } catch {}
-  }
 
   function move(appId: string, stageId: string) {
     const before = apps
@@ -83,6 +75,7 @@ export function Board({
                 key={v}
                 type="button"
                 aria-pressed={view === v}
+                aria-label={label}
                 onClick={() => changeView(v)}
                 className={cn(
                   "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground",

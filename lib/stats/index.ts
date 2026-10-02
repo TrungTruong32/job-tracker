@@ -1,4 +1,4 @@
-import { parseDay, sortStages, type AppLite, type EventLite, type StageLite } from "@/lib/domain"
+import { addDays, dayKey, sortStages, weekdayMon0, type AppLite, type EventLite, type StageLite } from "@/lib/domain"
 
 export type Breakdown = { key: string; total: number; interviewed: number; rate: number }
 
@@ -18,16 +18,9 @@ const WEEKS = 12
 const UNKNOWN = "Không rõ"
 const GHOSTED = "ghosted"
 
-function ymd(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0")
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
-
-/** Monday of the week containing `d` (local). */
-function weekStart(d: Date): Date {
-  const r = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  r.setDate(r.getDate() - ((r.getDay() + 6) % 7))
-  return r
+/** Monday (day key) of the week containing `key`. */
+function weekStart(key: string): string {
+  return addDays(key, -weekdayMon0(key))
 }
 
 function breakdown(apps: AppLite[], keyOf: (a: AppLite) => string, interviewed: Set<string>): Breakdown[] {
@@ -70,15 +63,11 @@ export function computeStats(
     if (hist.some((s) => s.id !== first?.id && s.name.trim().toLowerCase() !== GHOSTED)) responded++
   }
 
-  const thisWeek = weekStart(today)
-  const weekly = Array.from({ length: WEEKS }, (_, i) => {
-    const d = new Date(thisWeek)
-    d.setDate(d.getDate() - 7 * (WEEKS - 1 - i))
-    return { week: ymd(d), count: 0 }
-  })
+  const thisWeek = weekStart(dayKey(today))
+  const weekly = Array.from({ length: WEEKS }, (_, i) => ({ week: addDays(thisWeek, -7 * (WEEKS - 1 - i)), count: 0 }))
   const weekIndex = new Map(weekly.map((w, i) => [w.week, i]))
   for (const a of apps) {
-    const i = weekIndex.get(ymd(weekStart(parseDay(a.applied_at))))
+    const i = weekIndex.get(weekStart(dayKey(a.applied_at)))
     if (i !== undefined) weekly[i].count++
   }
 

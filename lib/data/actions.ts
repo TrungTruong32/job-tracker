@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { CvFitSchema, JdSummarySchema, type StoredCvFit } from "@/lib/ai/parse"
 import { encryptSecret } from "@/lib/crypto"
+import { todayStr } from "@/lib/format"
 import { requireUser } from "@/lib/supabase/server"
 import type { Json } from "@/lib/supabase/types"
 import type { ActionResult, ApplicationInput, EventInput } from "./types"
@@ -87,7 +88,7 @@ export async function updateApplication(id: string, input: ApplicationInput): Pr
     if (error) throw error
     // Stage changes always go through move_application so the timeline stays complete.
     if (current.stage_id !== stage_id) {
-      const { error: mvErr } = await supabase.rpc("move_application", { p_app: id, p_stage: stage_id })
+      const { error: mvErr } = await supabase.rpc("move_application", { p_app: id, p_stage: stage_id, p_date: todayStr() })
       if (mvErr) throw mvErr
     }
     refresh(`/applications/${id}`)
@@ -115,7 +116,7 @@ export async function moveApplication(id: string, stageId: string): Promise<Acti
     uuid.parse(id)
     uuid.parse(stageId)
     const { supabase } = await requireUser()
-    const { error } = await supabase.rpc("move_application", { p_app: id, p_stage: stageId })
+    const { error } = await supabase.rpc("move_application", { p_app: id, p_stage: stageId, p_date: todayStr() })
     if (error) throw error
     refresh(`/applications/${id}`)
     return { ok: true, data: undefined }

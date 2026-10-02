@@ -30,23 +30,39 @@ export type EventLite = {
 
 const DAY_MS = 86_400_000
 
-/** Local calendar-day number for a date (ignores time of day). */
-function dayNumber(d: Date): number {
-  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS)
+/**
+ * All calendar math happens in one fixed zone so the server (UTC on Vercel) and
+ * the browser agree on "today" — otherwise SSR output and hydration disagree.
+ */
+export const APP_TZ = "Asia/Ho_Chi_Minh"
+
+const keyFormat = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ, year: "numeric", month: "2-digit", day: "2-digit" })
+
+/** "YYYY-MM-DD" of a date-only string (as is) or an instant (in APP_TZ). */
+export function dayKey(value: string | Date): string {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  return keyFormat.format(typeof value === "string" ? new Date(value) : value)
 }
 
-/** Parse "YYYY-MM-DD" (or an ISO timestamp) as a local calendar date. */
-export function parseDay(value: string): Date {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split("-").map(Number)
-    return new Date(y, m - 1, d)
-  }
-  return new Date(value)
+/** Days since 1970-01-01 for a day key. */
+export function dayNumber(key: string): number {
+  const [y, m, d] = key.split("-").map(Number)
+  return Math.round(Date.UTC(y, m - 1, d) / DAY_MS)
+}
+
+/** Day key `n` days after `key` (negative = before). */
+export function addDays(key: string, n: number): string {
+  return new Date((dayNumber(key) + n) * DAY_MS).toISOString().slice(0, 10)
+}
+
+/** 0 = Monday … 6 = Sunday. */
+export function weekdayMon0(key: string): number {
+  return (new Date(dayNumber(key) * DAY_MS).getUTCDay() + 6) % 7
 }
 
 /** Whole calendar days from `value` to `today` (positive = in the past). */
 export function daysSince(value: string, today: Date): number {
-  return dayNumber(today) - dayNumber(parseDay(value))
+  return dayNumber(dayKey(today)) - dayNumber(dayKey(value))
 }
 
 export function sortStages<T extends { position: number }>(stages: T[]): T[] {

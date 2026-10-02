@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import {
   DndContext,
   DragOverlay,
@@ -75,8 +75,10 @@ function Column({
 }
 
 export function Kanban({ apps, stages, onMove, today }: Props) {
+  const dndId = useId() // stable across SSR/hydration (dnd-kit's own counter is not)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [mobileStage, setMobileStage] = useState(stages[0]?.id)
+  // Phone: open the first stage that has cards instead of an empty one.
+  const [mobileStage, setMobileStage] = useState(() => (stages.find((s) => apps.some((a) => a.stage_id === s.id)) ?? stages[0])?.id)
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
@@ -139,6 +141,7 @@ export function Kanban({ apps, stages, onMove, today }: Props) {
       {/* Tablet / laptop: drag between columns */}
       <div className="hidden sm:block">
         <DndContext
+          id={dndId}
           sensors={sensors}
           onDragStart={(e) => setActiveId(String(e.active.id))}
           onDragEnd={onDragEnd}
@@ -147,14 +150,14 @@ export function Kanban({ apps, stages, onMove, today }: Props) {
             screenReaderInstructions: { draggable: "Nhấn Space để nhấc thẻ, dùng phím mũi tên để di chuyển, Space để thả." },
           }}
         >
-          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6">
+          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6 xl:gap-2">
             {stages.map((s) => (
               <Column
                 key={s.id}
                 stage={s}
                 apps={byStage.get(s.id) ?? []}
                 {...common}
-                className="w-64 shrink-0 xl:w-auto xl:min-w-52 xl:flex-1"
+                className="w-64 shrink-0 xl:w-auto xl:min-w-34 xl:flex-1 xl:shrink"
               />
             ))}
           </div>

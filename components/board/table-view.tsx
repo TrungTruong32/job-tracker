@@ -21,6 +21,29 @@ type Props = {
   today: Date
 }
 
+function SortBtn({
+  k,
+  sort,
+  onToggle,
+  children,
+}: {
+  k: SortKey
+  sort: { key: SortKey; dir: "asc" | "desc" }
+  onToggle: (k: SortKey) => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(k)}
+      className="inline-flex items-center gap-1 font-medium hover:text-foreground"
+    >
+      {children}
+      {sort.key === k && (sort.dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
+    </button>
+  )
+}
+
 export function TableView({ apps, stages, cvs, onMove, today }: Props) {
   const [f, setF] = useState<BoardFilters>({})
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "applied_at", dir: "desc" })
@@ -59,13 +82,6 @@ export function TableView({ apps, stages, cvs, onMove, today }: Props) {
     link.click()
     URL.revokeObjectURL(url)
   }
-
-  const SortBtn = ({ k, children }: { k: SortKey; children: React.ReactNode }) => (
-    <button type="button" onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 font-medium hover:text-foreground">
-      {children}
-      {sort.key === k && (sort.dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
-    </button>
-  )
 
   return (
     <div className="space-y-3">
@@ -144,14 +160,14 @@ export function TableView({ apps, stages, cvs, onMove, today }: Props) {
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
             <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:whitespace-nowrap">
-              <th><SortBtn k="applied_at">Ngày nộp</SortBtn></th>
-              <th><SortBtn k="company">Công ty</SortBtn></th>
+              <th><SortBtn k="applied_at" sort={sort} onToggle={toggleSort}>Ngày nộp</SortBtn></th>
+              <th><SortBtn k="company" sort={sort} onToggle={toggleSort}>Công ty</SortBtn></th>
               <th>Vị trí</th>
               <th>Vòng</th>
               <th className="hidden xl:table-cell">Nguồn</th>
               <th className="hidden xl:table-cell">CV</th>
               <th className="hidden lg:table-cell">Phù hợp</th>
-              <th><SortBtn k="last_activity_at">Cập nhật</SortBtn></th>
+              <th><SortBtn k="last_activity_at" sort={sort} onToggle={toggleSort}>Cập nhật</SortBtn></th>
               <th className="w-10"><span className="sr-only">Thao tác</span></th>
             </tr>
           </thead>

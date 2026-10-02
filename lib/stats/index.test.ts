@@ -9,7 +9,7 @@ const stages: StageLite[] = [
   { id: "s6", name: "Rejected", position: 6, kind: "closed" },
   { id: "s7", name: "Ghosted", position: 7, kind: "closed" },
 ]
-const today = new Date(2026, 9, 10)
+const today = new Date("2026-10-10T09:00:00+07:00")
 
 function app(id: string, over: Partial<AppLite> = {}): AppLite {
   return {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Eye, EyeOff, Pencil, RotateCcw, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { InlinePreview } from "@/components/profile/inline-preview"
@@ -13,11 +13,14 @@ import { promoteToProfile } from "@/lib/data/cv-document-actions"
 import { itemDates, itemSubtitle, itemTitle, type Basics, type Bullet, type ProfileItem } from "@/lib/profile/schema"
 import { cn } from "@/lib/utils"
 
+export type Focus = { item_id?: string; bullet_id?: string; n: number }
+
 type Props = {
   content: CvContent
   onChange: (c: CvContent) => void
   items: ProfileItem[]
   basics: Basics
+  focus?: Focus | null
 }
 
 const bulletsOf = (it: ProfileItem) => (Array.isArray(it.data.bullets) ? (it.data.bullets as Bullet[]).filter((b) => typeof b?.text === "string") : [])
@@ -47,7 +50,7 @@ function BulletRow({
   const [draft, setDraft] = useState(override ?? b.text)
   const text = override ?? b.text
   return (
-    <li className={cn("flex items-start gap-2 py-1 text-sm", !chosen && "opacity-50")}>
+    <li data-bullet={b.id} className={cn("flex items-start gap-2 py-1 text-sm", !chosen && "opacity-50")}>
       <input type="checkbox" className="mt-1" checked={chosen} onChange={(e) => onToggle(e.target.checked)} aria-label={`Dùng bullet: ${text.slice(0, 40)}`} />
       <div className="min-w-0 flex-1">
         {editing ? (
@@ -110,6 +113,19 @@ function ItemBlock({ sectionKey, it, props, index, count }: { sectionKey: CvSect
   const chosen = !!ref
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
+  const rootRef = useRef<HTMLLIElement>(null)
+  // a keyword chip in the score panel asks to reveal this item
+  const focused = props.focus?.item_id === it.id ? props.focus : null
+  const [seenFocus, setSeenFocus] = useState(0)
+  if (focused && focused.n !== seenFocus) {
+    setSeenFocus(focused.n)
+    setOpen(true)
+  }
+  useEffect(() => {
+    if (!focused) return
+    const el = (focused.bullet_id && rootRef.current?.querySelector(`[data-bullet="${focused.bullet_id}"]`)) || rootRef.current
+    el?.scrollIntoView({ behavior: "smooth", block: "center" })
+  }, [focused])
   const all = bulletsOf(it)
   const allIds = all.map((b) => b.id)
   const chosenIds = ref ? (ref.bullet_ids ?? allIds) : []
@@ -125,7 +141,7 @@ function ItemBlock({ sectionKey, it, props, index, count }: { sectionKey: CvSect
     })
 
   return (
-    <li className={cn("rounded-lg border bg-background", !chosen && "border-dashed")} data-testid={`cv-item-${it.id}`}>
+    <li ref={rootRef} className={cn("rounded-lg border bg-background", !chosen && "border-dashed", focused && "ring-2 ring-emerald-500")} data-testid={`cv-item-${it.id}`}>
       <div className="flex items-start gap-2 p-2">
         <input
           type="checkbox"

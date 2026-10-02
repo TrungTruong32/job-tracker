@@ -1,5 +1,6 @@
 import "server-only"
 import type { CvContent } from "@/lib/cv/resolve"
+import type { Keyword } from "@/lib/cv/score"
 import type { CvStyle, TemplateKey } from "@/lib/cv/templates/types"
 import { workspaceContext } from "./queries"
 
@@ -12,14 +13,20 @@ export type CvDocument = {
   style: Partial<CvStyle>
   content: CvContent
   updated_at: string
+  target_application_id: string | null
+  target_jd: string | null
+  jd_keywords: JdKeywords | null
 }
 
-const COLUMNS = "id, name, template, target_role, target_tags, style, content, updated_at"
+export type JdKeywords = { jd_hash: string; keywords: Keyword[]; extracted_at: string }
+
+const COLUMNS = "id, name, template, target_role, target_tags, style, content, updated_at, target_application_id, target_jd, jd_keywords"
 
 const cast = (r: Record<string, unknown>): CvDocument => ({
   ...(r as unknown as CvDocument),
   content: (r.content && Array.isArray((r.content as CvContent).sections) ? r.content : { sections: [] }) as CvContent,
   style: (r.style ?? {}) as Partial<CvStyle>,
+  jd_keywords: r.jd_keywords && Array.isArray((r.jd_keywords as JdKeywords).keywords) ? (r.jd_keywords as JdKeywords) : null,
 })
 
 export async function getCvDocuments(): Promise<CvDocument[]> {

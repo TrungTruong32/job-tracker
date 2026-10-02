@@ -25,6 +25,7 @@ import type { Application, CvVersion, PublicSettings, Stage, StageEvent } from "
 import { formatDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { AiPanels } from "./ai-panels"
+import { OptimizeCv } from "./optimize-cv"
 import { Timeline } from "./timeline"
 
 type Props = {
@@ -33,9 +34,10 @@ type Props = {
   stages: Stage[]
   cvs: CvVersion[]
   settings: PublicSettings
+  docs: { id: string; name: string }[]
 }
 
-export function ApplicationDetail({ app, events, stages, cvs, settings }: Props) {
+export function ApplicationDetail({ app, events, stages, cvs, settings, docs }: Props) {
   const [tab, setTab] = useState<"info" | "timeline">("info")
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -152,6 +154,14 @@ export function ApplicationDetail({ app, events, stages, cvs, settings }: Props)
           </section>
 
           <AiPanels app={app} cvs={cvs} settings={settings} />
+
+          {app.jd_text?.trim() && (
+            <section className="space-y-2 rounded-xl border bg-card p-4">
+              <h2 className="font-semibold">Tối ưu CV theo JD này</h2>
+              <p className="text-xs text-muted-foreground">Nhân bản một bản CV, gắn JD của đơn này, rồi chấm điểm keyword và nhận gợi ý sửa.</p>
+              <OptimizeCv appId={app.id} company={app.company} docs={docs} />
+            </section>
+          )}
 
           {app.jd_text && (
             <details className="group rounded-xl border bg-card">

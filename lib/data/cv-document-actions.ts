@@ -26,6 +26,7 @@ const CreateSchema = z.object({
   target_role: z.string().trim().max(80).optional(),
   tags: TagsSchema.default([]),
   copyFrom: uuid.optional(),
+  target_application_id: uuid.optional(),
 })
 
 export async function createCvDocument(input: z.input<typeof CreateSchema>): Promise<ActionResult<{ id: string }>> {
@@ -57,7 +58,14 @@ export async function createCvDocument(input: z.input<typeof CreateSchema>): Pro
     }
     const { data, error } = await supabase
       .from("cv_documents")
-      .insert({ workspace_id: ws.id, name: v.name, ...row, style: row.style ?? {}, content: row.content ?? { sections: [] } })
+      .insert({
+        workspace_id: ws.id,
+        name: v.name,
+        ...row,
+        style: row.style ?? {},
+        content: row.content ?? { sections: [] },
+        ...(v.target_application_id ? { target_application_id: v.target_application_id } : {}),
+      })
       .select("id")
       .single()
     if (error) throw error
@@ -75,6 +83,18 @@ const UpdateSchema = z.object({
   target_tags: TagsSchema.optional(),
   style: CvStyleSchema.optional(),
   content: CvContentSchema.optional(),
+  target_application_id: uuid.nullable().optional(),
+  target_jd: z.string().max(30_000).nullable().optional(),
+  jd_keywords: z
+    .object({
+      jd_hash: z.string().max(20),
+      extracted_at: z.string().max(40),
+      keywords: z
+        .array(z.object({ term: z.string().max(60), aliases: z.array(z.string().max(60)).max(10), weight: z.enum(["required", "preferred"]), category: z.string().max(40).optional() }))
+        .max(60),
+    })
+    .nullable()
+    .optional(),
 })
 
 /** Autosave from the editor (no revalidate: the editor holds the state). */
@@ -85,7 +105,12 @@ export async function updateCvDocument(id: string, patch: z.input<typeof UpdateS
     const { supabase, ws } = await workspaceContext()
     const { data, error } = await supabase
       .from("cv_documents")
-      .update({ ...v, style: v.style as NonNullable<Json> | undefined, content: v.content as NonNullable<Json> | undefined })
+      .update({
+        ...v,
+        style: v.style as NonNullable<Json> | undefined,
+        content: v.content as NonNullable<Json> | undefined,
+        jd_keywords: v.jd_keywords as Json | undefined,
+      })
       .eq("workspace_id", ws.id)
       .eq("id", id)
       .select("updated_at")

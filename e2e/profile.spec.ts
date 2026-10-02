@@ -192,4 +192,60 @@ test.describe("profile", () => {
     await page.getByRole("button", { name: "Thêm đơn" }).filter({ visible: true }).first().click()
     await expect(page.getByRole("dialog").getByLabel("Bản CV đã gửi").locator("option", { hasText: "AI Engineer — Test" })).toHaveCount(1)
   })
+
+  // Part C — score a CV against an application's JD (AI mocked)
+  test("optimize a CV for an application: keywords, add from profile, apply an AI suggestion", async ({ page }) => {
+    test.setTimeout(180_000)
+    await login(page)
+    await page.route("**/api/ai/run", async (route) => {
+      const body = route.request().postDataJSON()
+      if (body.task === "extract_keywords")
+        return route.fulfill({
+          json: {
+            data: {
+              keywords: [
+                { term: "RAG", aliases: [], weight: "required", category: "AI/ML" },
+                { term: "LangChain", aliases: [], weight: "required", category: "AI/ML" },
+                { term: "evaluation", aliases: ["evals"], weight: "required", category: "AI/ML" },
+                { term: "Terraform", aliases: [], weight: "preferred", category: "Cloud" },
+              ],
+            },
+          },
+        })
+      if (body.task === "suggest_edits") {
+        const b = body.input.bullets[0]
+        return route.fulfill({ json: { data: { bullets: [{ id: b.id, text: b.text + " using LangChain", reason: "Nêu rõ công cụ", keywords: ["LangChain"] }], summary: null } } })
+      }
+      return route.fallback()
+    })
+
+    await page.getByRole("link", { name: /ABC AI/ }).first().click()
+    await page.getByRole("button", { name: "Tối ưu CV cho đơn này" }).click()
+    await expect(page).toHaveURL(/\/cv\/[0-9a-f-]{36}\?tab=score$/)
+    const panel = page.getByTestId("score-panel")
+    await expect(panel.getByLabel("Nguồn JD")).toHaveValue(/[0-9a-f-]{36}/)
+    await panel.getByRole("button", { name: "Phân tích JD" }).click()
+    await expect(page.getByText("Đã phân tích JD: 4 keyword")).toBeVisible()
+
+    const total = panel.getByTestId("score-total")
+    await expect(total).toHaveText(/\d+/)
+    const before = Number(await total.textContent())
+    await expect(panel.getByTestId("kw-missing").filter({ hasText: "evaluation" })).toBeVisible()
+
+    // the long project in the profile mentions "evaluation harnesses"
+    await panel.getByRole("button", { name: "Thêm evaluation từ hồ sơ" }).click()
+    await expect(page.getByText("Đã thêm vào bản CV")).toBeVisible()
+    await expect(panel.getByTestId("kw-evidence").filter({ hasText: "evaluation" })).toBeVisible()
+    await expect.poll(async () => Number(await total.textContent())).toBeGreaterThan(before)
+
+    // AI suggestion -> apply -> becomes a CV-only rewrite
+    await panel.getByRole("button", { name: "Gợi ý sửa bằng AI" }).click()
+    const sug = panel.getByTestId("suggestion")
+    await expect(sug).toHaveCount(1)
+    await sug.getByRole("button", { name: "Áp dụng" }).click()
+    await expect(sug).toHaveCount(0)
+    await page.getByRole("tab", { name: "Xem trước" }).first().click()
+    await expect(page.getByText("Đã lưu")).toBeVisible({ timeout: 10_000 })
+  })
 })
+

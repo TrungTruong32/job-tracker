@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { ApplicationDetail } from "@/components/detail/application-detail"
+import { getCvDocuments } from "@/lib/data/cv-documents"
 import { getApplication, getCvs, getEvents, getPublicSettings, getStages } from "@/lib/data/queries"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -14,17 +15,18 @@ export async function generateMetadata({ params }: PageProps<"/applications/[id]
 export default async function ApplicationPage({ params }: PageProps<"/applications/[id]">) {
   const { id } = await params
   if (!UUID.test(id)) notFound()
-  const [app, events, stages, cvs, settings] = await Promise.all([
+  const [app, events, stages, cvs, settings, docs] = await Promise.all([
     getApplication(id),
     getEvents(id),
     getStages(),
     getCvs(),
     getPublicSettings(),
+    getCvDocuments(),
   ])
   if (!app) notFound()
   return (
     <div className="p-4 sm:p-6">
-      <ApplicationDetail app={app} events={events} stages={stages} cvs={cvs} settings={settings} />
+      <ApplicationDetail app={app} events={events} stages={stages} cvs={cvs} settings={settings} docs={docs.map((d) => ({ id: d.id, name: d.name }))} />
     </div>
   )
 }

@@ -13,13 +13,14 @@ import { resolveCv, type CvContent } from "@/lib/cv/resolve"
 import { clampStyle, TEMPLATES } from "@/lib/cv/templates/registry"
 import type { CvStyle, TemplateKey } from "@/lib/cv/templates/types"
 import { saveDocumentVersion, updateCvDocument } from "@/lib/data/cv-document-actions"
-import type { CvDocument } from "@/lib/data/cv-documents"
+import type { CvDocument, JdKeywords } from "@/lib/data/cv-documents"
 import type { PublicSettings } from "@/lib/data/types"
 import type { Basics, ProfileItem } from "@/lib/profile/schema"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
-import { ContentTree } from "./content-tree"
+import { ContentTree, type Focus } from "./content-tree"
 import { FitPanel } from "./fit-panel"
+import { ScorePanel, type ScoreApp } from "./score-panel"
 import { StylePanel } from "./style-panel"
 import { measureStyle, renderPdfBlob, useCvRender, type RenderInput } from "./use-cv-render"
 
@@ -37,7 +38,11 @@ export function CvEditor({
   items,
   settings,
   workspaceId,
+  apps,
+  initialTab,
 }: {
+  apps: ScoreApp[]
+  initialTab?: "preview" | "score"
   doc: CvDocument
   basics: Basics
   items: ProfileItem[]
@@ -54,7 +59,12 @@ export function CvEditor({
       return Array.isArray(it.data.bullets) ? (it.data.bullets as { id: string }[]).map((b) => b.id) : []
     }),
   )
-  const [tab, setTab] = useState<"content" | "preview">("content")
+  const [tab, setTab] = useState<"content" | "preview" | "score">(initialTab ?? "content")
+  const [rightTab, setRightTab] = useState<"preview" | "score">(initialTab === "score" ? "score" : "preview")
+  const [targetAppId, setTargetAppId] = useState<string | null>(doc.target_application_id)
+  const [targetJd, setTargetJd] = useState<string | null>(doc.target_jd)
+  const [keywords, setKeywords] = useState<JdKeywords | null>(doc.jd_keywords)
+  const [focus, setFocus] = useState<Focus | null>(null)
   const [showStyle, setShowStyle] = useState(false)
   const [save, setSave] = useState<"saved" | "saving" | "error">("saved")
   const [exporting, startExport] = useTransition()
@@ -77,7 +87,15 @@ export function CvEditor({
       first.current = false
       return
     }
-    const payload = { ...(name.trim() ? { name: name.trim() } : {}), template, style, content }
+    const payload = {
+      ...(name.trim() ? { name: name.trim() } : {}),
+      template,
+      style,
+      content,
+      target_application_id: targetAppId,
+      target_jd: targetJd,
+      jd_keywords: keywords,
+    }
     pending.current = payload
     setSave("saving")
     const t = setTimeout(async () => {
@@ -87,7 +105,7 @@ export function CvEditor({
       if (!res.ok) toast.error("Không lưu được", { description: res.error })
     }, 800)
     return () => clearTimeout(t)
-  }, [doc.id, name, template, style, content])
+  }, [doc.id, name, template, style, content, targetAppId, targetJd, keywords])
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       if (pending.current) e.preventDefault()
@@ -218,14 +236,24 @@ export function CvEditor({
         </p>
       )}
 
-      <div className="grid grid-cols-2 rounded-lg border p-0.5 lg:hidden" role="tablist">
+      <div className="grid grid-cols-3 rounded-lg border p-0.5 lg:hidden" role="tablist">
         {(
           [
             ["content", "Nội dung"],
             ["preview", "Xem trước"],
+            ["score", "Chấm điểm"],
           ] as const
         ).map(([k, l]) => (
-          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={cn("h-8 rounded-md text-sm text-muted-foreground", tab === k && "bg-muted font-medium text-foreground")}>
+          <button
+            key={k}
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => {
+              setTab(k)
+              if (k !== "content") setRightTab(k)
+            }}
+            className={cn("h-8 rounded-md text-sm text-muted-foreground", tab === k && "bg-muted font-medium text-foreground")}
+          >
             {l}
           </button>
         ))}
@@ -233,10 +261,55 @@ export function CvEditor({
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className={cn(tab !== "content" && "max-lg:hidden")}>
-          <ContentTree content={content} onChange={setContent} items={items} basics={basics} />
+          <ContentTree content={content} onChange={setContent} items={items} basics={basics} focus={focus} />
         </div>
-        <div className={cn("lg:sticky lg:top-4 lg:self-start", tab !== "preview" && "max-lg:hidden")}>
-          <div className="relative space-y-3" data-testid="cv-preview">
+        <div className={cn("lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-y-auto", tab === "content" && "max-lg:hidden")}>
+          <div className="mb-3 hidden grid-cols-2 rounded-lg border p-0.5 lg:grid" role="tablist" aria-label="Bảng bên phải">
+            {(
+              [
+                ["preview", "Xem trước"],
+                ["score", "Chấm điểm"],
+              ] as const
+            ).map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={rightTab === k} onClick={() => setRightTab(k)} className={cn("h-8 rounded-md text-sm text-muted-foreground", rightTab === k && "bg-muted font-medium text-foreground")}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {rightTab === "score" && (
+            <ScorePanel
+              resolved={resolved}
+              content={content}
+              items={items}
+              onePage={!!fill && !overflow}
+              settings={settings}
+              apps={apps}
+              targetAppId={targetAppId}
+              targetJd={targetJd}
+              keywords={keywords}
+              onTarget={({ appId, jd }) => {
+                setTargetAppId(appId)
+                setTargetJd(jd)
+              }}
+              onKeywords={setKeywords}
+              onAddFromProfile={(h) => {
+                const c = h.kind === "bullet" ? ops.toggleBullet(content, h.section, h.item_id, h.bullet_id!, true, bulletsOf(h.item_id)) : ops.toggleEntry(content, h.section, h.item_id, true)
+                setContent(c)
+                toast.success("Đã thêm vào bản CV", { description: h.label })
+              }}
+              onApplyBullet={(itemId, bulletId, text) => {
+                const sec = content.sections.find((s) => s.items.some((i) => i.item_id === itemId))
+                const orig = (items.find((i) => i.id === itemId)?.data.bullets as { id: string; text: string }[] | undefined)?.find((b) => b.id === bulletId)?.text ?? ""
+                if (sec) setContent(ops.setBulletOverride(content, sec.key, itemId, bulletId, text, orig))
+              }}
+              onApplySummary={(text) => setContent({ ...ops.toggleSection(content, "summary", true), summary_override: text })}
+              onFocus={(w) => {
+                setFocus((f) => ({ item_id: w.item_id, bullet_id: w.bullet_id, n: (f?.n ?? 0) + 1 }))
+                setTab("content")
+              }}
+            />
+          )}
+          <div className={cn("relative space-y-3", rightTab !== "preview" && "hidden")} data-testid="cv-preview">
             {busy && (
               <span className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-full bg-background/90 px-2 py-0.5 text-xs shadow">
                 <Loader2 className="size-3 animate-spin" /> Đang dựng

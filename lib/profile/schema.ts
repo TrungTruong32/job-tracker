@@ -30,8 +30,8 @@ const list = z.array(z.string().trim().min(1)).default([])
 
 export const ItemDataSchemas = {
   experience: z.object({ company: str, title: str, location: opt, start: date, end, bullets, tech: list }),
-  education: z.object({ school: str, degree: opt, field: opt, start: date, end, gpa: opt, bullets }),
-  project: z.object({ name: str, role: opt, url: opt, start: date, end, bullets, tech: list, experience_id: opt }),
+  education: z.object({ school: str, degree: opt, field: opt, specialization: opt, start: date, end, gpa: opt, bullets }),
+  project: z.object({ name: str, role: opt, url: opt, link_label: opt, start: date, end, bullets, tech: list, experience_id: opt }),
   publication: z.object({ title: str, venue: opt, authors: opt, date, url: opt }),
   skill: z.object({ category: str, items: list }),
   certification: z.object({ name: str, issuer: opt, date, url: opt }),
@@ -42,7 +42,8 @@ export const ItemDataSchemas = {
 
 export type ItemData<S extends Section = Section> = z.infer<(typeof ItemDataSchemas)[S]>
 
-export const LinkSchema = z.object({ label: z.string().trim(), url: z.string().trim().min(1) })
+// `text`: what the CV shows for the link (default: the last part of the URL)
+export const LinkSchema = z.object({ label: z.string().trim(), url: z.string().trim().min(1), text: z.string().trim().max(80).optional() })
 export const BasicsSchema = z.object({
   full_name: opt,
   headline: opt,

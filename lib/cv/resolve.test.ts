@@ -42,6 +42,55 @@ describe("formatCvDate / formatRange", () => {
   })
 })
 
+describe("resolveCv overview layout", () => {
+  const all: ProfileItem[] = [
+    ...items,
+    { id: "edu", section: "education", position: 0, tags: [], data: { school: "HCMUS", degree: "BSc", bullets: [] } },
+    { id: "c1", section: "certification", position: 0, tags: [], data: { name: "VSTEP B2" } },
+    { id: "c2", section: "certification", position: 1, tags: [], data: { name: "Docker", issuer: "Udemy" } },
+    { id: "l1", section: "language", position: 0, tags: [], data: { name: "English", level: "B2" } },
+    { id: "pub", section: "publication", position: 0, tags: [], data: { title: "Paper" } },
+  ]
+  const run = (c = contentFromTags(all, [])) => resolveCv(c, { basics, items: all }, { dateFormat: "YYYY", nestProjects: true, layout: "overview" })
+
+  it("keeps only Summary, Education, Work Experience, Key Skills in that order", () => {
+    const r = run()
+    expect(r.sections.map((s) => [s.key, s.title])).toEqual([
+      ["summary", "Summary"],
+      ["education", "Education"],
+      ["experience", "Work Experience"],
+      ["skill", "Key Skills"],
+    ])
+    // nested project stays under its job; the loose project and the publication are reported
+    expect(r.sections[2].entries[0].children.map((c) => c.id)).toEqual(["prj1"])
+    expect(r.omitted).toEqual([
+      { title: "Projects", count: 1 },
+      { title: "Publications", count: 1 },
+    ])
+  })
+
+  it("folds certifications into Education and languages into Key Skills", () => {
+    const r = run()
+    expect(r.sections[1].entries[0].fields.certifications).toBe("VSTEP B2, Docker - Udemy.")
+    expect(r.sections[3].entries.at(-1)).toMatchObject({ fields: { category: "Languages" }, list: ["English *(B2)*"] })
+  })
+
+  it("respects a custom title and hidden certifications", () => {
+    const c = contentFromTags(all, [])
+    c.sections.find((s) => s.key === "skill")!.title = "Skills & Tools"
+    c.sections.find((s) => s.key === "certification")!.visible = false
+    const r = run(c)
+    expect(r.sections[3].title).toBe("Skills & Tools")
+    expect(r.sections[1].entries[0].fields.certifications).toBeUndefined()
+  })
+
+  it("is a no-op without the layout", () => {
+    const r = resolveCv(contentFromTags(all, []), { basics, items: all }, { dateFormat: "YYYY", nestProjects: true })
+    expect(r.sections.some((s) => s.key === "publication")).toBe(true)
+    expect(r.omitted).toEqual([])
+  })
+})
+
 describe("resolveCv", () => {
   it("applies field and bullet overrides, bullet selection and order", () => {
     const r = resolveCv(

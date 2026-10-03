@@ -60,8 +60,8 @@ export function buildParseCvMessages(cvText: string): ChatMessage[] {
 }
 Sections and their data fields (dates as "MMM YYYY" or "YYYY", end may be "Present"):
 - "experience": company, title, location, start, end, bullets: string[], tech: string[]
-- "education": school, degree, field, start, end, gpa, bullets: string[]
-- "project": name, role, url, start, end, bullets: string[], tech: string[], parent_company (when the project is listed under a job, the company of that job)
+- "education": school, degree, field, specialization, start, end, gpa, bullets: string[]
+- "project": name, role, url, link_label (the visible text of the link, e.g. "Paper link"), start, end, bullets: string[], tech: string[], parent_company (when the project is listed under a job, the company of that job)
 - "publication": title, venue, authors, date, url
 - "skill": category, items: string[]   (one item per skill group as written in the CV)
 - "certification": name, issuer, date, url

@@ -26,7 +26,17 @@ export type ResolvedEntry = {
   children: ResolvedEntry[] // sub-projects nested under an experience
 }
 export type ResolvedSection = { key: CvSectionKey; title: string; entries: ResolvedEntry[] }
-export type ResolvedCv = { basics: Basics; sections: ResolvedSection[]; warnings: string[] }
+export type ResolvedCv = {
+  basics: Basics
+  sections: ResolvedSection[]
+  warnings: string[]
+  /** sections the layout does not show (e.g. Publications in "overview") */
+  omitted: { title: string; count: number }[]
+}
+
+/** "overview" = the owner's sample-cv.tex: only these sections, in this order. */
+export type CvLayout = "overview"
+export const OVERVIEW_SECTIONS: CvSectionKey[] = ["summary", "education", "experience", "skill"]
 
 export const DEFAULT_TITLES: Record<CvSectionKey, string> = {
   summary: "Summary",
@@ -99,7 +109,7 @@ function resolveEntry(item: ProfileItem, ref: CvItemRef, fmt: DateFormat, warnin
 export function resolveCv(
   content: CvContent,
   profile: { basics: Basics; items: ProfileItem[] },
-  opts: { dateFormat: DateFormat; nestProjects: boolean },
+  opts: { dateFormat: DateFormat; nestProjects: boolean; layout?: CvLayout },
 ): ResolvedCv {
   const warnings: string[] = []
   const byId = new Map(profile.items.map((i) => [i.id, i]))
@@ -109,7 +119,7 @@ export function resolveCv(
     .filter((s) => s.visible)
     .map((s) => ({
       key: s.key,
-      title: s.title?.trim() || DEFAULT_TITLES[s.key],
+      title: s.title?.trim() || (opts.layout === "overview" && s.key === "skill" ? "Key Skills" : DEFAULT_TITLES[s.key]),
       entries: s.items.flatMap((ref) => {
         const item = byId.get(ref.item_id)
         if (!item) {
@@ -133,8 +143,45 @@ export function resolveCv(
     }
   }
 
+  let omitted: ResolvedCv["omitted"] = []
+  if (opts.layout === "overview") [sections, omitted] = shapeOverview(sections)
+
   sections = sections.filter((s) => s.entries.length || (s.key === "summary" && basics.summary))
-  return { basics, sections, warnings }
+  return { basics, sections, warnings, omitted }
+}
+
+const certText = (c: ResolvedEntry) => [c.fields.name ?? c.fields.title, c.fields.issuer].filter(Boolean).join(" - ")
+
+/** Fold certifications into Education and languages into Key Skills; drop every other section. */
+function shapeOverview(sections: ResolvedSection[]): [ResolvedSection[], ResolvedCv["omitted"]] {
+  const get = (k: CvSectionKey) => sections.find((s) => s.key === k)
+  const edu = get("education")
+  const certs = get("certification")?.entries ?? []
+  const folded = new Set<CvSectionKey>()
+  if (edu?.entries.length && certs.length) {
+    edu.entries[0].fields.certifications = certs.map(certText).join(", ") + "."
+    folded.add("certification")
+  }
+  const langs = get("language")?.entries ?? []
+  if (langs.length) {
+    let skill = get("skill")
+    if (!skill) sections.push((skill = { key: "skill", title: "Key Skills", entries: [] }))
+    skill.entries.push({
+      id: "languages",
+      section: "skill",
+      fields: { category: "Languages", dates: "" },
+      bullets: [],
+      tech: [],
+      list: langs.map((l) => (l.fields.level ? `${l.fields.name} *(${l.fields.level})*` : l.fields.name)),
+      children: [],
+    })
+    folded.add("language")
+  }
+  const omitted = sections
+    .filter((s) => !OVERVIEW_SECTIONS.includes(s.key) && !folded.has(s.key) && s.entries.length)
+    .map((s) => ({ title: s.title, count: s.entries.length }))
+  const kept = OVERVIEW_SECTIONS.flatMap((k) => sections.filter((s) => s.key === k))
+  return [kept, omitted]
 }
 
 const ALWAYS: Section[] = ["skill", "language"]

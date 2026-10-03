@@ -16,6 +16,8 @@ export type Theme = {
   entryHeader: "inline" | "two-line"
   projectTitleAccent: boolean
   skills: "labeled-bullets" | "lines" | "chips"
+  /** "overview": sample-cv details (education as bold bullets, skill lines end with ".") */
+  layout?: "overview"
 }
 
 export function themeFrom(style: CvStyle, font: Theme["font"], overrides: Partial<Theme> = {}): Theme {
@@ -55,12 +57,16 @@ export function Rich({ text, style }: { text: string; style?: Style }) {
   )
 }
 
-export function Bullets({ items, t }: { items: { id: string; text: string }[]; t: Theme }) {
+// "overview" spacing is measured from sample-cv.pdf (LaTeX itemize: topsep, itemsep 0.5mm + parsep 1pt)
+const ov = (t: Theme) => t.layout === "overview"
+const sep = (t: Theme) => (ov(t) ? "   |   " : "  |  ") // \quad|\quad
+
+export function Bullets({ items, t, top }: { items: { id: string; text: string }[]; t: Theme; top?: number }) {
   if (!items.length) return null
   return (
-    <View style={{ marginTop: t.gap * 0.3 }}>
+    <View style={{ marginTop: top ?? (ov(t) ? t.fs * 0.45 : t.gap * 0.3) }}>
       {items.map((b) => (
-        <View key={b.id} style={{ flexDirection: "row", marginBottom: t.gap * 0.15 }} wrap={false}>
+        <View key={b.id} style={{ flexDirection: "row", marginBottom: ov(t) ? t.fs * 0.24 : t.gap * 0.15 }} wrap={false}>
           <Text style={{ width: t.fs * 0.9 }}>•</Text>
           <Rich text={b.text} style={{ flex: 1 }} />
         </View>
@@ -81,20 +87,20 @@ export function Row({ left, right, style }: { left: React.ReactNode; right?: str
 
 const join = (parts: (string | undefined)[], sep = "  |  ") => parts.filter(Boolean).join(sep)
 
-function SubProject({ e, t }: { e: ResolvedEntry; t: Theme }) {
+function SubProject({ e, t, first }: { e: ResolvedEntry; t: Theme; first: boolean }) {
   const f = e.fields
   return (
-    <View style={{ marginTop: t.gap * 0.5 }}>
+    <View style={{ marginTop: ov(t) ? (first ? 0 : t.fs * 0.2) : t.gap * 0.5 }}>
       <Row
         left={
           <Text>
             <Text style={{ fontWeight: 700, fontStyle: "italic", color: t.projectTitleAccent ? t.accent : undefined }}>{f.name}</Text>
-            {e.tech.length ? <Text style={{ fontStyle: "italic" }}>{"  |  " + e.tech.join(", ")}</Text> : null}
+            {e.tech.length ? <Text style={{ fontStyle: "italic" }}>{sep(t) + e.tech.join(", ")}</Text> : null}
             {f.url ? (
               <Text>
-                {"  |  "}
+                {sep(t)}
                 <Link src={f.url} style={{ color: "inherit", fontStyle: "italic", textDecoration: "underline" }}>
-                  Link
+                  {f.link_label || "Link"}
                 </Link>
               </Text>
             ) : null}
@@ -122,7 +128,7 @@ function EntryHeader({ e, t }: { e: ResolvedEntry; t: Theme }) {
           left={
             <Text>
               <Text style={bold}>{f.title}</Text>
-              <Text>{"  |  "}</Text>
+              <Text>{sep(t)}</Text>
               <Text style={bold}>{f.company}</Text>
               {f.location ? <Text>{", " + f.location}</Text> : null}
             </Text>
@@ -131,6 +137,7 @@ function EntryHeader({ e, t }: { e: ResolvedEntry; t: Theme }) {
         />
       )
     case "education":
+      if (t.layout === "overview") return <Row left={<Text style={bold}>{(f.school ?? "").toUpperCase()}</Text>} right={f.dates} />
       return (
         <View>
           <Row left={<Text style={bold}>{t.entryHeader === "inline" ? (f.school ?? "").toUpperCase() : f.school}</Text>} right={f.dates} />
@@ -226,7 +233,15 @@ function Skills({ s, t }: { s: ResolvedSection; t: Theme }) {
         ))}
       </View>
     )
-  return <Bullets items={s.entries.map((e) => ({ id: e.id, text: `**${e.fields.category}:** ${e.list.join(", ")}` }))} t={t} />
+  const end = t.layout === "overview" ? "." : ""
+  return <Bullets items={s.entries.map((e) => ({ id: e.id, text: `**${e.fields.category}:** ${e.list.join(", ")}${end}` }))} t={t} />
+}
+
+/** sample-cv education bullets: degree, specialization | GPA, certifications. */
+export function educationLines(f: Record<string, string>): string[] {
+  const degree = [f.degree, f.field].filter(Boolean).join(" in ")
+  const spec = [f.specialization && `**Specialization:** ${f.specialization}`, f.gpa && `**GPA:** ${f.gpa}`].filter(Boolean).join("   |   ")
+  return [degree && `**${degree}**`, spec, f.certifications && `**Certifications:** ${f.certifications}`].filter(Boolean) as string[]
 }
 
 /** Body of one section (everything below its title). */
@@ -238,11 +253,19 @@ export function SectionBody({ s, t, summary }: { s: ResolvedSection; t: Theme; s
   return (
     <View>
       {s.entries.map((e, i) => (
-        <View key={e.id} style={{ marginTop: i ? t.gap * 0.8 : 0 }}>
+        <View key={e.id} style={{ marginTop: i ? (ov(t) ? t.fs * 0.75 : t.gap * 0.8) : 0 }}>
           <EntryHeader e={e} t={t} />
-          <Bullets items={e.bullets} t={t} />
-          {e.children.map((c) => (
-            <SubProject key={c.id} e={c} t={t} />
+          <Bullets
+            top={ov(t) && e.section === "education" ? t.fs * 0.75 : undefined}
+            items={
+              t.layout === "overview" && e.section === "education"
+                ? [...educationLines(e.fields).map((text, j) => ({ id: `edu-${j}`, text })), ...e.bullets]
+                : e.bullets
+            }
+            t={t}
+          />
+          {e.children.map((c, j) => (
+            <SubProject key={c.id} e={c} t={t} first={j === 0 && !e.bullets.length} />
           ))}
         </View>
       ))}
@@ -251,7 +274,7 @@ export function SectionBody({ s, t, summary }: { s: ResolvedSection; t: Theme; s
 }
 
 /** "label: value" pieces for the contact block; links show a short handle. */
-export function contactParts(cv: { basics: { email?: string; phone?: string; location?: string; links: { label: string; url: string }[] } }) {
+export function contactParts(cv: { basics: { email?: string; phone?: string; location?: string; links: { label: string; url: string; text?: string }[] } }) {
   const short = (url: string) => {
     try {
       const u = new URL(url)
@@ -268,6 +291,6 @@ export function contactParts(cv: { basics: { email?: string; phone?: string; loc
       b.email && { label: "Email", text: b.email, href: `mailto:${b.email}` },
       b.location && { label: "Location", text: b.location },
     ].filter(Boolean) as { label: string; text: string; href?: string }[],
-    links: b.links.map((l) => ({ label: l.label || "Link", text: short(l.url), href: l.url })),
+    links: b.links.map((l) => ({ label: l.label || "Link", text: l.text || short(l.url), href: l.url })),
   }
 }

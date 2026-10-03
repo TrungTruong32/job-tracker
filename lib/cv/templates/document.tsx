@@ -12,12 +12,16 @@ const CONFIG: Record<Exclude<TemplateKey, "sidebar">, { font: Theme["font"]; hea
   mine: { font: "Arimo", header: "mine", title: "upper-rule" },
   compact: { font: "Arimo", header: "mine", title: "upper-rule" },
   classic: { font: "Tinos", header: "centered", title: "smallcaps-rule", theme: { entryHeader: "two-line", projectTitleAccent: false, skills: "lines" } },
-  harvard: { font: "Tinos", header: "centered", title: "center-upper", theme: { entryHeader: "two-line", projectTitleAccent: false, skills: "lines" } },
+  harvard: { font: "Arimo", header: "mine", title: "upper-rule", theme: { layout: "overview" } },
+  serif: { font: "Tinos", header: "centered", title: "center-upper", theme: { entryHeader: "two-line", projectTitleAccent: false, skills: "lines" } },
   modern: { font: "Arimo", header: "band", title: "accent-bar", theme: { skills: "chips" } },
 }
 
 function SectionTitle({ title, kind, t }: { title: string; kind: TitleKind; t: Theme }) {
-  const base: Style = { fontWeight: 700, marginTop: t.gap * 1.2, marginBottom: t.gap * 0.6 }
+  const base: Style =
+    t.layout === "overview"
+      ? { fontWeight: 700, marginTop: t.fs * 0.84, marginBottom: t.fs * 0.48 } // measured from sample-cv.pdf
+      : { fontWeight: 700, marginTop: t.gap * 1.2, marginBottom: t.gap * 0.6 }
   switch (kind) {
     case "upper-rule":
       return (
@@ -168,7 +172,7 @@ function Sidebar({ cv, style }: { cv: ResolvedCv; style: CvStyle }) {
 
 /** The CV as a React-PDF document. `tall` renders one 3xA4-high page for measuring. */
 export function CvPdf({ cv, style, template, qrDataUrl, tall }: { cv: ResolvedCv; style: CvStyle; template: TemplateKey; qrDataUrl?: string | null; tall?: boolean }) {
-  const font = template === "classic" || template === "harvard" ? "Tinos" : "Arimo"
+  const font = template === "sidebar" ? "Arimo" : CONFIG[template].font
   const margin = style.margin_mm * MM
   const pageStyle: Style = {
     fontFamily: font,

@@ -77,7 +77,7 @@ export function StylePanel({
           </NativeSelect>
         </div>
       </div>
-      {(template === "mine" || template === "compact") && (
+      {(template === "mine" || template === "harvard" || template === "compact") && (
         <div className="space-y-1 sm:col-span-2">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={style.show_qr} onChange={(e) => set("show_qr", e.target.checked)} /> Mã QR ở góc phải

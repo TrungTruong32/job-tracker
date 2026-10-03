@@ -2,8 +2,8 @@ import { parseInline } from "./inline"
 import type { ResolvedCv, ResolvedEntry, ResolvedSection } from "./resolve"
 import type { CvStyle, TemplateKey } from "./templates/types"
 
-// .tex export. `mine` reproduces the structure of the owner's Overview.tex; `classic` is a
-// Jake's-Resume-like layout. Both use only packages from Overview.tex so they compile on a
+// .tex export. `mine` reproduces the structure of the owner's Overview.tex, `overview` that of
+// sample-cv.tex (same look, education as bold bullets); `classic` is a Jake's-Resume-like layout. Both use only packages from Overview.tex so they compile on a
 // stock TeX install (pdflatex, T1 + utf8).
 
 const SPECIAL: [RegExp, string][] = [
@@ -49,18 +49,26 @@ export function inlineToLatex(s: string): string {
 const e = escapeLatex
 const ITEMIZE = "\\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt, topsep=1mm]"
 
-function itemize(lines: string[]): string {
+/** `exact`: the list exactly as sample-cv.tex writes it (`{}` only where a line starts with "["). */
+function itemize(lines: string[], exact = false): string {
   if (!lines.length) return ""
+  if (exact)
+    return [ITEMIZE.replace(", topsep=1mm", ""), ...lines.map((l) => `    \\item${l.startsWith("[") ? "{}" : ""} ${l}`), "\\end{itemize}"].join("\n")
   return [ITEMIZE, ...lines.map((l) => `    \\item{} ${l}`), "\\end{itemize}"].join("\n")
 }
 
-type Flavor = "mine" | "classic"
+type Flavor = "mine" | "overview" | "classic"
+
+const projectLine = (c: ResolvedEntry) =>
+  `\\cvproject{${e(c.fields.name ?? "")}}` +
+  (c.tech.length ? ` \\quad|\\quad \\textit{${e(c.tech.join(", "))}}` : "") +
+  (c.fields.url ? ` \\quad|\\quad \\href{${escapeUrl(c.fields.url)}}{\\textit{\\underline{${e(c.fields.link_label || "Link")}}}}` : "")
 
 function entry(x: ResolvedEntry, flavor: Flavor): string {
   const f = x.fields
   const dates = e(f.dates ?? "")
-  const bullets = () => itemize(x.bullets.map((b) => inlineToLatex(b.text)))
-  const tech = x.tech.length ? ` \\quad|\\quad \\textit{${e(x.tech.join(", "))}}` : ""
+  const exact = flavor === "overview"
+  const bullets = () => itemize(x.bullets.map((b) => inlineToLatex(b.text)), exact)
   switch (x.section) {
     case "experience": {
       const head =
@@ -68,11 +76,25 @@ function entry(x: ResolvedEntry, flavor: Flavor): string {
           ? `\\noindent\\textbf{${e(f.company ?? "")}} \\hfill ${dates}\\\\\n\\textit{${e(f.title ?? "")}} \\hfill \\textit{${e(f.location ?? "")}}`
           : `\\noindent\\textbf{${e(f.title ?? "")}} \\quad|\\quad \\textbf{${e(f.company ?? "")}} \\hfill ${dates}\\\\`
       const kids = x.children
-        .map((c) => `\\cvproject{${e(c.fields.name ?? "")}}${c.tech.length ? ` \\quad|\\quad \\textit{${e(c.tech.join(", "))}}` : ""}\n${itemize(c.bullets.map((b) => inlineToLatex(b.text)))}`)
+        .map((c) => `${projectLine(c)}\n${itemize(c.bullets.map((b) => inlineToLatex(b.text)), exact)}`)
         .join("\n\\vspace{-1mm}%\n")
-      return [head, bullets(), kids].filter(Boolean).join("\n")
+      return [head, bullets(), kids && exact ? `\\vspace{-1mm}%\n${kids}` : kids].filter(Boolean).join("\n")
     }
     case "education": {
+      if (flavor === "overview") {
+        const degree = [f.degree, f.field].filter(Boolean).join(" in ")
+        const spec = [f.specialization && `\\textbf{Specialization:} ${inlineToLatex(f.specialization)}`, f.gpa && `\\textbf{GPA:} ${inlineToLatex(f.gpa)}`]
+          .filter(Boolean)
+          .join(" \\quad|\\quad ")
+        const lines = [
+          degree && `\\textbf{${inlineToLatex(degree)}}`,
+          spec,
+          f.certifications && `\\textbf{Certifications:} ${inlineToLatex(f.certifications)}`,
+          ...x.bullets.map((b) => inlineToLatex(b.text)),
+        ].filter(Boolean) as string[]
+        const head = `\\noindent\\textbf{${e((f.school ?? "").toLocaleUpperCase("vi"))}} \\hfill ${dates}\\\\[1mm]`
+        return [head, lines.length ? `\\vspace{-6mm}\n${itemize(lines, true)}` : ""].filter(Boolean).join("\n")
+      }
       const school = flavor === "mine" ? e((f.school ?? "").toUpperCase()) : e(f.school ?? "")
       const degree = [f.degree, f.field].filter(Boolean).join(" in ")
       return [
@@ -81,7 +103,7 @@ function entry(x: ResolvedEntry, flavor: Flavor): string {
       ].join("\n")
     }
     case "project":
-      return `\\noindent\\cvproject{${e(f.name ?? "")}}${tech} \\hfill ${dates}\n${bullets()}`
+      return `\\noindent${projectLine(x)} \\hfill ${dates}\n${bullets()}`
     case "publication": {
       const title = f.url ? `\\href{${escapeUrl(f.url)}}{\\textbf{${e(f.title ?? "")}}}` : `\\textbf{${e(f.title ?? "")}}`
       return `\\noindent ${title}${f.venue ? ` --- \\textit{${e(f.venue)}}` : ""}${f.authors ? `. ${e(f.authors)}` : ""} \\hfill ${dates}\\\\`
@@ -97,9 +119,9 @@ function entry(x: ResolvedEntry, flavor: Flavor): string {
 }
 
 function section(s: ResolvedSection, cv: ResolvedCv, flavor: Flavor): string {
-  const title = `\\cvsection{${e(flavor === "mine" ? s.title.toLocaleUpperCase("vi") : s.title)}}`
+  const title = `\\cvsection{${e(flavor !== "classic" ? s.title.toLocaleUpperCase("vi") : s.title)}}`
   if (s.key === "summary") return `${title}\n${inlineToLatex(cv.basics.summary ?? "")}`
-  if (s.key === "skill") return `${title}\n\\vspace{-3mm}\n${itemize(s.entries.map((x) => `\\textbf{${e(x.fields.category ?? "")}:} ${e(x.list.join(", "))}.`))}`
+  if (s.key === "skill") return `${title}\n\\vspace{-3mm}\n${itemize(s.entries.map((x) => `\\textbf{${e(x.fields.category ?? "")}:} ${inlineToLatex(x.list.join(", "))}.`), flavor === "overview")}`
   if (s.key === "language") return `${title}\n${s.entries.map((x) => `${e(x.fields.name ?? "")}${x.fields.level ? ` \\textit{(${e(x.fields.level)})}` : ""}`).join(", ")}.`
   return `${title}\n${s.entries.map((x) => entry(x, flavor)).join("\n\\vspace{1mm}\n\n")}`
 }
@@ -133,11 +155,11 @@ ${sans ? "\\usepackage{helvet}\n\\renewcommand{\\familydefault}{\\sfdefault}\n" 
 `
 
 export function exportLatex(cv: ResolvedCv, style: CvStyle, template: TemplateKey): string {
-  const flavor: Flavor = template === "classic" || template === "harvard" ? "classic" : "mine"
+  const flavor: Flavor = template === "classic" || template === "serif" ? "classic" : template === "harvard" ? "overview" : "mine"
   const marginIn = Math.round((style.margin_mm / 25.4) * 100) / 100
   const b = cv.basics
   const commands =
-    flavor === "mine"
+    flavor !== "classic"
       ? `\\newcommand{\\cvsection}[1]{
     \\vspace{1ex}
     \\noindent\\textbf{\\large\\color{cvblue} #1} \\textcolor{cvblue}{\\hrulefill}\\par
@@ -158,10 +180,10 @@ export function exportLatex(cv: ResolvedCv, style: CvStyle, template: TemplateKe
     b.email && `\\textbf{Email:} \\href{mailto:${escapeUrl(b.email)}}{${e(b.email)}}`,
     b.location && `\\textbf{Location:} ${e(b.location)}`,
   ].filter(Boolean)
-  const links = b.links.map((l) => `\\textbf{${e(l.label || "Link")}:} \\href{${escapeUrl(l.url)}}{\\underline{${e(shortHandle(l.url))}}}`)
-  const qr = flavor === "mine" && style.show_qr
+  const links = b.links.map((l) => `\\textbf{${e(l.label || "Link")}:} \\href{${escapeUrl(l.url)}}{\\underline{${e(l.text || shortHandle(l.url))}}}`)
+  const qr = flavor !== "classic" && style.show_qr
   const header =
-    flavor === "mine"
+    flavor !== "classic"
       ? `\\noindent
 \\begin{minipage}[t]{\\textwidth}
     \\centering
@@ -192,7 +214,7 @@ ${
     \\small ${[...plain, ...links].join(" \\quad|\\quad ")}
 \\end{center}`
 
-  return `${PREAMBLE(style.font_size, marginIn, style.accent, flavor === "mine")}
+  return `${PREAMBLE(style.font_size, marginIn, style.accent, flavor !== "classic")}
 ${commands}
 \\begin{document}
 

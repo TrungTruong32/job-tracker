@@ -1,4 +1,4 @@
-import type { DateFormat, ResolvedCv } from "../resolve"
+import type { CvLayout, DateFormat, ResolvedCv } from "../resolve"
 import type { StyleBounds } from "../fit"
 
 export type CvStyle = {
@@ -11,7 +11,7 @@ export type CvStyle = {
   qr_url?: string
 }
 
-export type TemplateKey = "mine" | "classic" | "harvard" | "modern" | "compact" | "sidebar"
+export type TemplateKey = "mine" | "classic" | "harvard" | "serif" | "modern" | "compact" | "sidebar"
 
 export type TemplateProps = { cv: ResolvedCv; style: CvStyle; qrDataUrl?: string | null }
 
@@ -20,6 +20,7 @@ export type TemplateDef = {
   label: string
   description: string
   nestProjects: boolean
+  layout?: CvLayout
   defaults: CvStyle
   bounds: StyleBounds
 }

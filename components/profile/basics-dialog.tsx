@@ -55,7 +55,7 @@ function BasicsForm({ basics, onDone }: { basics: Basics; onDone: () => void }) 
         <div className="space-y-1.5">
           <Label>Link</Label>
           {v.links.map((l, i) => (
-            <div key={i} className="flex gap-2">
+            <div key={i} className="flex flex-wrap gap-2 sm:flex-nowrap">
               <Input
                 aria-label="Tên link"
                 placeholder="LinkedIn"
@@ -67,8 +67,16 @@ function BasicsForm({ basics, onDone }: { basics: Basics; onDone: () => void }) 
                 aria-label="URL"
                 type="url"
                 placeholder="https://"
+                className="min-w-0 flex-1 basis-40"
                 value={l.url}
                 onChange={(e) => setV((p) => ({ ...p, links: p.links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)) }))}
+              />
+              <Input
+                aria-label="Chữ hiện trên CV"
+                placeholder="Chữ hiện trên CV"
+                className="w-36"
+                value={l.text ?? ""}
+                onChange={(e) => setV((p) => ({ ...p, links: p.links.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) }))}
               />
               <Button type="button" size="icon" variant="ghost" aria-label="Xoá link" onClick={() => setV((p) => ({ ...p, links: p.links.filter((_, j) => j !== i) }))}>
                 <X />

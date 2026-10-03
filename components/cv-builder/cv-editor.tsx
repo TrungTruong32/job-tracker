@@ -72,7 +72,7 @@ export function CvEditor({
 
   const qrUrl = style.qr_url || basics.links.find((l) => /portfolio|website|web/i.test(l.label))?.url || basics.links[0]?.url || null
   const resolved = useMemo(
-    () => resolveCv(content, { basics, items }, { dateFormat: style.date_format, nestProjects: TEMPLATES[template].nestProjects }),
+    () => resolveCv(content, { basics, items }, { dateFormat: style.date_format, nestProjects: TEMPLATES[template].nestProjects, layout: TEMPLATES[template].layout }),
     [content, basics, items, style.date_format, template],
   )
   const input: RenderInput = { cv: resolved, style, template, qrUrl }
@@ -140,7 +140,7 @@ export function CvEditor({
 
   function exportTex() {
     download(new Blob([exportLatex(resolved, style, template)], { type: "application/x-tex" }), `${fileSafe(name)}.tex`)
-    if (template !== "mine" && template !== "classic") toast.info("File .tex dùng bố cục 'CV của bạn' (mẫu này chưa có bản LaTeX riêng).")
+    if (!["mine", "harvard", "classic", "serif"].includes(template)) toast.info("File .tex dùng bố cục 'CV của bạn' (mẫu này chưa có bản LaTeX riêng).")
   }
 
   function saveVersion() {
@@ -229,6 +229,12 @@ export function CvEditor({
           }}
           onApplyDrops={(drops) => setContent(ops.applyDrops(content, drops, bulletsOf))}
         />
+      )}
+      {TEMPLATES[template].layout === "overview" && resolved.omitted.length > 0 && (
+        <p className="rounded-lg bg-sky-500/10 p-2 text-xs text-sky-800 dark:text-sky-200">
+          Mẫu {TEMPLATES[template].label} chỉ dùng Summary, Education, Work Experience, Key Skills (chứng chỉ gộp vào Education, ngoại ngữ gộp vào Key Skills;
+          dự án phải gắn vào một kinh nghiệm). Không hiện: {resolved.omitted.map((o) => `${o.title} (${o.count})`).join(", ")}.
+        </p>
       )}
       {resolved.warnings.length > 0 && (
         <p className="rounded-lg bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">

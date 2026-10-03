@@ -1,4 +1,4 @@
-import type { TemplateDef, TemplateKey } from "./types"
+import type { CvStyle, TemplateDef, TemplateKey } from "./types"
 
 // Template metadata only (no React-PDF import) so the editor UI can list templates cheaply.
 export const TEMPLATES: Record<TemplateKey, TemplateDef> = {
@@ -62,6 +62,22 @@ export const TEMPLATES: Record<TemplateKey, TemplateDef> = {
 }
 
 export const TEMPLATE_KEYS = Object.keys(TEMPLATES) as TemplateKey[]
+
+/** Style after switching template: settings the user never changed follow the new template's defaults. */
+export function switchTemplateStyle(from: TemplateKey, to: TemplateKey, style: CvStyle): CvStyle {
+  const a = TEMPLATES[from].defaults
+  const b = TEMPLATES[to].defaults
+  const pick = <K extends keyof CvStyle>(k: K) => (style[k] === a[k] ? b[k] : style[k])
+  return clampStyle(to, {
+    ...style,
+    font_size: pick("font_size"),
+    line_height: pick("line_height"),
+    margin_mm: pick("margin_mm"),
+    accent: pick("accent"),
+    date_format: pick("date_format"),
+    show_qr: pick("show_qr"),
+  })
+}
 
 export function clampStyle<T extends { font_size: number; line_height: number; margin_mm: number }>(key: TemplateKey, s: T): T {
   const b = TEMPLATES[key].bounds

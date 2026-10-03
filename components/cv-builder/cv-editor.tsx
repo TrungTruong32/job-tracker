@@ -10,7 +10,7 @@ import * as ops from "@/lib/cv/content-ops"
 import { exportLatex } from "@/lib/cv/latex"
 import { cvToPlainText } from "@/lib/cv/plain"
 import { resolveCv, type CvContent } from "@/lib/cv/resolve"
-import { clampStyle, TEMPLATES } from "@/lib/cv/templates/registry"
+import { clampStyle, switchTemplateStyle, TEMPLATES } from "@/lib/cv/templates/registry"
 import type { CvStyle, TemplateKey } from "@/lib/cv/templates/types"
 import { saveDocumentVersion, updateCvDocument } from "@/lib/data/cv-document-actions"
 import type { CvDocument, JdKeywords } from "@/lib/data/cv-documents"
@@ -119,7 +119,7 @@ export function CvEditor({
 
   function changeTemplate(t: TemplateKey) {
     setTemplate(t)
-    setStyle((s) => clampStyle(t, { ...s, accent: s.accent === TEMPLATES[template].defaults.accent ? TEMPLATES[t].defaults.accent : s.accent }))
+    setStyle((s) => switchTemplateStyle(template, t, s))
   }
 
   const bulletsOf = (id: string) => {

@@ -68,7 +68,7 @@ export function Bullets({ items, t, top }: { items: { id: string; text: string }
       {items.map((b) => (
         <View key={b.id} style={{ flexDirection: "row", marginBottom: ov(t) ? t.fs * 0.24 : t.gap * 0.15 }} wrap={false}>
           <Text style={{ width: t.fs * 0.9 }}>•</Text>
-          <Rich text={b.text} style={{ flex: 1 }} />
+          <Rich text={ov(t) ? b.text.replace(/ \| /g, sep(t)) : b.text} style={{ flex: 1 }} />
         </View>
       ))}
     </View>
@@ -137,15 +137,8 @@ function EntryHeader({ e, t }: { e: ResolvedEntry; t: Theme }) {
         />
       )
     case "education":
-      if (t.layout === "overview") return <Row left={<Text style={bold}>{(f.school ?? "").toUpperCase()}</Text>} right={f.dates} />
-      return (
-        <View>
-          <Row left={<Text style={bold}>{t.entryHeader === "inline" ? (f.school ?? "").toUpperCase() : f.school}</Text>} right={f.dates} />
-          {(f.degree || f.field || f.gpa) && (
-            <Text>{join([join([f.degree, f.field], " in "), f.gpa && `GPA: ${f.gpa}`])}</Text>
-          )}
-        </View>
-      )
+      // degree / GPA / certifications are bullets (built in resolveCv)
+      return <Row left={<Text style={bold}>{t.entryHeader === "inline" ? (f.school ?? "").toUpperCase() : f.school}</Text>} right={f.dates} />
     case "project":
       return (
         <Row
@@ -215,7 +208,7 @@ function Skills({ s, t }: { s: ResolvedSection; t: Theme }) {
             <Text style={{ fontWeight: 700, marginRight: 4 }}>{e.fields.category}:</Text>
             {e.list.map((x) => (
               <Text key={x} style={{ backgroundColor: "#eef2f7", borderRadius: 3, paddingHorizontal: 3, paddingVertical: 1, marginRight: 3, marginBottom: 2, fontSize: t.fs * 0.9 }}>
-                {x}
+                <Rich text={x} />
               </Text>
             ))}
           </View>
@@ -228,7 +221,7 @@ function Skills({ s, t }: { s: ResolvedSection; t: Theme }) {
         {s.entries.map((e) => (
           <Text key={e.id} style={{ marginBottom: t.gap * 0.2 }}>
             <Text style={{ fontWeight: 700 }}>{e.fields.category}: </Text>
-            {e.list.join(", ")}
+            <Rich text={e.list.join(", ")} />
           </Text>
         ))}
       </View>
@@ -237,12 +230,7 @@ function Skills({ s, t }: { s: ResolvedSection; t: Theme }) {
   return <Bullets items={s.entries.map((e) => ({ id: e.id, text: `**${e.fields.category}:** ${e.list.join(", ")}${end}` }))} t={t} />
 }
 
-/** sample-cv education bullets: degree, specialization | GPA, certifications. */
-export function educationLines(f: Record<string, string>): string[] {
-  const degree = [f.degree, f.field].filter(Boolean).join(" in ")
-  const spec = [f.specialization && `**Specialization:** ${f.specialization}`, f.gpa && `**GPA:** ${f.gpa}`].filter(Boolean).join("   |   ")
-  return [degree && `**${degree}**`, spec, f.certifications && `**Certifications:** ${f.certifications}`].filter(Boolean) as string[]
-}
+
 
 /** Body of one section (everything below its title). */
 export function SectionBody({ s, t, summary }: { s: ResolvedSection; t: Theme; summary?: string }) {
@@ -257,11 +245,7 @@ export function SectionBody({ s, t, summary }: { s: ResolvedSection; t: Theme; s
           <EntryHeader e={e} t={t} />
           <Bullets
             top={ov(t) && e.section === "education" ? t.fs * 0.75 : undefined}
-            items={
-              t.layout === "overview" && e.section === "education"
-                ? [...educationLines(e.fields).map((text, j) => ({ id: `edu-${j}`, text })), ...e.bullets]
-                : e.bullets
-            }
+            items={e.bullets}
             t={t}
           />
           {e.children.map((c, j) => (

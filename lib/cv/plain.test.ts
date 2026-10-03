@@ -7,7 +7,7 @@ import { SAMPLE_BASICS, SAMPLE_ITEMS } from "./templates/sample"
 
 describe("cvToPlainText", () => {
   it("lists header, sections, nested projects and bullets without markup", () => {
-    const cv = resolveCv(contentFromTags(SAMPLE_ITEMS, []), { basics: SAMPLE_BASICS, items: SAMPLE_ITEMS }, { dateFormat: "MMM YYYY", nestProjects: true })
+    const cv = resolveCv(contentFromTags(SAMPLE_ITEMS, []), { basics: SAMPLE_BASICS, items: SAMPLE_ITEMS }, { dateFormat: "MMM YYYY" })
     const t = cvToPlainText(cv)
     expect(t.startsWith("Nguyen Minh An\nAI Engineer")).toBe(true)
     expect(t).toContain("WORK EXPERIENCE")

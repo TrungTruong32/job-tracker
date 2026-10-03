@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { ProfileItem } from "@/lib/profile/schema"
-import { contentFromTags, formatCvDate, formatRange, resolveCv, type CvContent } from "./resolve"
+import { contentFromTags, formatCvDate, formatRange, resolveCv, tidyLabeled, type CvContent } from "./resolve"
 
 const items: ProfileItem[] = [
   {
@@ -42,7 +42,7 @@ describe("formatCvDate / formatRange", () => {
   })
 })
 
-describe("resolveCv overview layout", () => {
+describe("resolveCv sections (sample-cv)", () => {
   const all: ProfileItem[] = [
     ...items,
     { id: "edu", section: "education", position: 0, tags: [], data: { school: "HCMUS", degree: "BSc", bullets: [] } },
@@ -51,7 +51,7 @@ describe("resolveCv overview layout", () => {
     { id: "l1", section: "language", position: 0, tags: [], data: { name: "English", level: "B2" } },
     { id: "pub", section: "publication", position: 0, tags: [], data: { title: "Paper" } },
   ]
-  const run = (c = contentFromTags(all, [])) => resolveCv(c, { basics, items: all }, { dateFormat: "YYYY", nestProjects: true, layout: "overview" })
+  const run = (c = contentFromTags(all, [])) => resolveCv(c, { basics, items: all }, { dateFormat: "YYYY" })
 
   it("keeps only Summary, Education, Work Experience, Key Skills in that order", () => {
     const r = run()
@@ -61,17 +61,21 @@ describe("resolveCv overview layout", () => {
       ["experience", "Work Experience"],
       ["skill", "Key Skills"],
     ])
-    // nested project stays under its job; the loose project and the publication are reported
+    // nested project stays under its job; the loose project is reported
     expect(r.sections[2].entries[0].children.map((c) => c.id)).toEqual(["prj1"])
-    expect(r.omitted).toEqual([
-      { title: "Projects", count: 1 },
-      { title: "Publications", count: 1 },
-    ])
+    expect(r.omitted).toEqual([{ title: "Dự án chưa gắn vào kinh nghiệm", count: 1 }])
+  })
+
+  it("drops sections outside the four (older documents) and reports them", () => {
+    const c = contentFromTags(all, [])
+    c.sections.push({ key: "publication", visible: true, items: [{ item_id: "pub" }] })
+    expect(run(c).omitted).toContainEqual({ title: "Publications", count: 1 })
+    expect(run(c).sections.some((s) => s.key === "publication")).toBe(false)
   })
 
   it("folds certifications into Education and languages into Key Skills", () => {
     const r = run()
-    expect(r.sections[1].entries[0].fields.certifications).toBe("VSTEP B2, Docker - Udemy.")
+    expect(r.sections[1].entries[0].bullets.map((b) => b.text)).toEqual(["**BSc**", "**Certifications:** VSTEP B2, Docker - Udemy."])
     expect(r.sections[3].entries.at(-1)).toMatchObject({ fields: { category: "Languages" }, list: ["English *(B2)*"] })
   })
 
@@ -81,13 +85,41 @@ describe("resolveCv overview layout", () => {
     c.sections.find((s) => s.key === "certification")!.visible = false
     const r = run(c)
     expect(r.sections[3].title).toBe("Skills & Tools")
-    expect(r.sections[1].entries[0].fields.certifications).toBeUndefined()
+    expect(r.sections[1].entries[0].bullets.map((b) => b.text)).toEqual(["**BSc**"])
   })
 
-  it("is a no-op without the layout", () => {
-    const r = resolveCv(contentFromTags(all, []), { basics, items: all }, { dateFormat: "YYYY", nestProjects: true })
-    expect(r.sections.some((s) => s.key === "publication")).toBe(true)
-    expect(r.omitted).toEqual([])
+  it("does not repeat lines the education bullets already have, and bolds their labels", () => {
+    const edu = {
+      id: "edu",
+      section: "education" as const,
+      position: 0,
+      tags: [],
+      data: {
+        school: "Example University of Science",
+        degree: "Bachelor of Science",
+        field: "Mathematics & Computer Science",
+        gpa: "8.40/10 (3.55/4)",
+        bullets: [
+          { id: "x1", text: "Specialization: Applied Mathematics and Computer Science | GPA: 8.40/10 (3.55/4)" },
+          { id: "x2", text: "Certifications: VSTEP B2 (English Proficiency), Docker - Udemy." },
+        ],
+      },
+    }
+    const list = [...all.filter((i) => i.section !== "education"), edu]
+    const r = resolveCv(contentFromTags(list, []), { basics, items: list }, { dateFormat: "YYYY" })
+    expect(r.sections[1].entries[0].bullets.map((b) => b.text)).toEqual([
+      "**Bachelor of Science in Mathematics & Computer Science**",
+      "**Specialization:** Applied Mathematics and Computer Science | **GPA:** 8.40/10 *(3.55/4)*",
+      "**Certifications:** VSTEP B2 *(English Proficiency)*, Docker - Udemy.",
+    ])
+  })
+})
+
+describe("tidyLabeled", () => {
+  it("bolds labels, italicizes notes, leaves other text alone", () => {
+    expect(tidyLabeled("Honors: Merit (top 5%)")).toBe("**Honors:** Merit *(top 5%)*")
+    expect(tidyLabeled("**GPA:** 8.2 *(3.4/4)*")).toBe("**GPA:** 8.2 *(3.4/4)*")
+    expect(tidyLabeled("Built a pipeline (Python) at https://x.dev")).toBe("Built a pipeline (Python) at https://x.dev")
   })
 })
 
@@ -102,7 +134,7 @@ describe("resolveCv", () => {
         },
       ]),
       { basics, items },
-      { dateFormat: "MMM YYYY", nestProjects: false },
+      { dateFormat: "MMM YYYY"},
     )
     const e = r.sections[0].entries[0]
     expect(e.fields.title).toBe("AI Engineer")
@@ -112,20 +144,18 @@ describe("resolveCv", () => {
   })
 
   it("null bullet_ids means all bullets in profile order", () => {
-    const r = resolveCv(content([{ key: "experience", visible: true, items: [{ item_id: "exp1", bullet_ids: null }] }]), { basics, items }, { dateFormat: "YYYY", nestProjects: false })
+    const r = resolveCv(content([{ key: "experience", visible: true, items: [{ item_id: "exp1", bullet_ids: null }] }]), { basics, items }, { dateFormat: "YYYY" })
     expect(r.sections[0].entries[0].bullets.map((b) => b.id)).toEqual(["b1", "b2"])
   })
 
-  it("nests sub-projects under their selected experience when the template asks for it", () => {
+  it("nests sub-projects under their selected experience", () => {
     const c = content([
       { key: "experience", visible: true, items: [{ item_id: "exp1" }] },
       { key: "project", visible: true, items: [{ item_id: "prj1" }, { item_id: "prj2" }] },
     ])
-    const nested = resolveCv(c, { basics, items }, { dateFormat: "YYYY", nestProjects: true })
+    const nested = resolveCv(c, { basics, items }, { dateFormat: "YYYY" })
     expect(nested.sections[0].entries[0].children.map((x) => x.fields.name)).toEqual(["Order Pipeline"])
-    expect(nested.sections.find((s) => s.key === "project")!.entries.map((x) => x.fields.name)).toEqual(["Job Tracker"])
-    const flat = resolveCv(c, { basics, items }, { dateFormat: "YYYY", nestProjects: false })
-    expect(flat.sections.find((s) => s.key === "project")!.entries).toHaveLength(2)
+    expect(nested.omitted).toEqual([{ title: "Dự án chưa gắn vào kinh nghiệm", count: 1 }])
   })
 
   it("skips deleted items and missing bullets with warnings, hides invisible and empty sections", () => {
@@ -136,7 +166,7 @@ describe("resolveCv", () => {
         { key: "award", visible: true, items: [] },
       ]),
       { basics, items },
-      { dateFormat: "YYYY", nestProjects: false },
+      { dateFormat: "YYYY"},
     )
     expect(r.sections.map((s) => s.key)).toEqual(["experience"])
     expect(r.sections[0].entries[0].bullets.map((b) => b.id)).toEqual(["b1"])
@@ -144,9 +174,9 @@ describe("resolveCv", () => {
   })
 
   it("uses the summary override and default titles", () => {
-    const r = resolveCv(content([{ key: "summary", visible: true, items: [] }, { key: "skill", visible: true, items: [{ item_id: "sk1" }] }], { summary_override: "Tailored" }), { basics, items }, { dateFormat: "YYYY", nestProjects: false })
+    const r = resolveCv(content([{ key: "summary", visible: true, items: [] }, { key: "skill", visible: true, items: [{ item_id: "sk1" }] }], { summary_override: "Tailored" }), { basics, items }, { dateFormat: "YYYY" })
     expect(r.basics.summary).toBe("Tailored")
-    expect(r.sections.map((s) => s.title)).toEqual(["Summary", "Skills"])
+    expect(r.sections.map((s) => s.title)).toEqual(["Summary", "Key Skills"])
     expect(r.sections[1].entries[0].list).toEqual(["PyTorch", "RAG"])
   })
 })

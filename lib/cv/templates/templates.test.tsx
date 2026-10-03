@@ -14,14 +14,14 @@ beforeAll(() => registerFonts("public/fonts"))
 const build = (key: (typeof TEMPLATE_KEYS)[number], repeat = 1) => {
   const def = TEMPLATES[key]
   const items = Array.from({ length: repeat }, (_, r) => SAMPLE_ITEMS.map((i) => ({ ...i, id: `${i.id}-${r}`, data: { ...i.data, ...(i.data.experience_id ? { experience_id: `${i.data.experience_id}-${r}` } : {}) } }))).flat()
-  const cv = resolveCv(contentFromTags(items, []), { basics: SAMPLE_BASICS, items }, { dateFormat: def.defaults.date_format, nestProjects: def.nestProjects, layout: def.layout })
+  const cv = resolveCv(contentFromTags(items, []), { basics: SAMPLE_BASICS, items }, { dateFormat: def.defaults.date_format })
   return { cv, style: def.defaults }
 }
 
 describe("harvard (overview) with the sample-cv content", () => {
   it("fits on one A4 page like the original", async () => {
     const def = TEMPLATES.harvard
-    const cv = resolveCv(sampleCvContent(), { basics: SAMPLE_CV_BASICS, items: SAMPLE_CV_ITEMS }, { dateFormat: def.defaults.date_format, nestProjects: def.nestProjects, layout: def.layout })
+    const cv = resolveCv(sampleCvContent(), { basics: SAMPLE_CV_BASICS, items: SAMPLE_CV_ITEMS }, { dateFormat: def.defaults.date_format })
     const pdf = await renderToBuffer(<CvPdf cv={cv} style={def.defaults} template="harvard" />)
     expect((await getDocumentProxy(new Uint8Array(pdf))).numPages).toBe(1)
   }, 30_000)

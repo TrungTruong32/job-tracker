@@ -1,4 +1,4 @@
-import type { CvLayout, DateFormat, ResolvedCv } from "../resolve"
+import type { DateFormat, ResolvedCv } from "../resolve"
 import type { StyleBounds } from "../fit"
 
 export type CvStyle = {
@@ -19,8 +19,6 @@ export type TemplateDef = {
   key: TemplateKey
   label: string
   description: string
-  nestProjects: boolean
-  layout?: CvLayout
   defaults: CvStyle
   bounds: StyleBounds
 }

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import * as ops from "@/lib/cv/content-ops"
-import { DEFAULT_ORDER, DEFAULT_TITLES, type CvContent, type CvSectionKey } from "@/lib/cv/resolve"
+import { DEFAULT_TITLES, EDITOR_SECTIONS, FOLDED_INTO, type CvContent, type CvSectionKey } from "@/lib/cv/resolve"
 import { promoteToProfile } from "@/lib/data/cv-document-actions"
 import { itemDates, itemSubtitle, itemTitle, type Basics, type Bullet, type ProfileItem } from "@/lib/profile/schema"
 import { cn } from "@/lib/utils"
@@ -198,16 +198,13 @@ function ItemBlock({ sectionKey, it, props, index, count }: { sectionKey: CvSect
 
 export function ContentTree(props: Props) {
   const { content, onChange, items, basics } = props
-  // every section that has profile items (or summary) shows up, in document order then default order
-  // sections with nothing in the profile are hidden (summary always shows)
+  // the CV always has Summary, Education, Work Experience, Key Skills in this order; certifications,
+  // projects and languages are picked here and folded into them. Sections empty in the profile are hidden.
   const relevant = (k: CvSectionKey) => k === "summary" || items.some((i) => i.section === k)
-  const keys = [
-    ...content.sections.map((s) => s.key).filter(relevant),
-    ...DEFAULT_ORDER.filter((k) => !content.sections.some((s) => s.key === k) && relevant(k)),
-  ]
+  const keys = EDITOR_SECTIONS.filter(relevant)
   return (
     <div className="space-y-3">
-      {keys.map((key, si) => {
+      {keys.map((key) => {
         const sec = content.sections.find((s) => s.key === key)
         const visible = sec?.visible ?? false
         const chosenOrder = sec?.items.map((r) => r.item_id) ?? []
@@ -225,19 +222,20 @@ export function ContentTree(props: Props) {
               >
                 {visible ? <Eye /> : <EyeOff />}
               </Button>
-              <Input
-                aria-label="Tiêu đề mục"
-                maxLength={60}
-                className="h-7 flex-1 border-transparent bg-transparent px-1 font-semibold shadow-none hover:border-input"
-                value={sec?.title ?? DEFAULT_TITLES[key]}
-                onChange={(e) => onChange(ops.renameSection(content, key, e.target.value))}
-              />
-              <Button size="icon-xs" variant="ghost" aria-label="Đưa mục lên" disabled={si === 0 || !sec} onClick={() => onChange(ops.moveSectionAmong(content, key, -1, keys))}>
-                <ArrowUp />
-              </Button>
-              <Button size="icon-xs" variant="ghost" aria-label="Đưa mục xuống" disabled={!sec || si >= keys.filter((k) => content.sections.some((s) => s.key === k)).length - 1} onClick={() => onChange(ops.moveSectionAmong(content, key, 1, keys))}>
-                <ArrowDown />
-              </Button>
+              {FOLDED_INTO[key] ? (
+                <p className="flex-1 px-1 text-sm">
+                  <span className="font-semibold">{DEFAULT_TITLES[key]}</span>
+                  <span className="text-xs text-muted-foreground"> — {FOLDED_INTO[key]}</span>
+                </p>
+              ) : (
+                <Input
+                  aria-label="Tiêu đề mục"
+                  maxLength={60}
+                  className="h-7 flex-1 border-transparent bg-transparent px-1 font-semibold shadow-none hover:border-input"
+                  value={sec?.title ?? DEFAULT_TITLES[key]}
+                  onChange={(e) => onChange(ops.renameSection(content, key, e.target.value))}
+                />
+              )}
             </div>
             {key === "summary" ? (
               <div className="space-y-1">

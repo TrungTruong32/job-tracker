@@ -12,7 +12,7 @@ function entryLines(e: ResolvedEntry, indent = ""): string[] {
       head = `${f.title} | ${f.company}${dates}`
       break
     case "education":
-      head = `${f.school}${[f.degree, f.field].some(Boolean) ? ` — ${[f.degree, f.field].filter(Boolean).join(" in ")}` : ""}${f.gpa ? `, GPA ${f.gpa}` : ""}${dates}`
+      head = `${f.school}${dates}` // degree / GPA are bullets
       break
     case "project":
       head = `${f.name}${e.tech.length ? ` | ${e.tech.join(", ")}` : ""}${dates}`

@@ -74,7 +74,7 @@ const content = (): CvContent => ({
     { key: "skill", visible: true, items: [{ item_id: "s1" }] },
   ],
 })
-const cv = () => resolveCv(content(), { basics, items }, { dateFormat: "YYYY", nestProjects: false })
+const cv = () => resolveCv(content(), { basics, items }, { dateFormat: "YYYY" })
 
 describe("scoreCv", () => {
   const keywords = [

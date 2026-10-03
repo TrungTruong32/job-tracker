@@ -36,7 +36,7 @@ describe("inlineToLatex", () => {
 
 const cvFor = (key: "mine" | "classic" | "harvard") => {
   const def = TEMPLATES[key]
-  return resolveCv(contentFromTags(SAMPLE_ITEMS, []), { basics: SAMPLE_BASICS, items: SAMPLE_ITEMS }, { dateFormat: def.defaults.date_format, nestProjects: def.nestProjects, layout: def.layout })
+  return resolveCv(contentFromTags(SAMPLE_ITEMS, []), { basics: SAMPLE_BASICS, items: SAMPLE_ITEMS }, { dateFormat: def.defaults.date_format })
 }
 
 describe("harvard (overview) export", () => {
@@ -50,7 +50,7 @@ describe("harvard (overview) export", () => {
 
   it("reproduces sample-cv.tex from the same content", () => {
     const def = TEMPLATES.harvard
-    const cv = resolveCv(sampleCvContent(), { basics: SAMPLE_CV_BASICS, items: SAMPLE_CV_ITEMS }, { dateFormat: def.defaults.date_format, nestProjects: def.nestProjects, layout: def.layout })
+    const cv = resolveCv(sampleCvContent(), { basics: SAMPLE_CV_BASICS, items: SAMPLE_CV_ITEMS }, { dateFormat: def.defaults.date_format })
     const tex = exportLatex(cv, def.defaults, "harvard")
     const ref = readFileSync("test/fixtures/sample-cv.tex", "utf8")
     // only difference: section titles are uppercased in JS (\uppercase breaks on UTF-8)

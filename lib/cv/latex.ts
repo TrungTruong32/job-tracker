@@ -81,26 +81,14 @@ function entry(x: ResolvedEntry, flavor: Flavor): string {
       return [head, bullets(), kids && exact ? `\\vspace{-1mm}%\n${kids}` : kids].filter(Boolean).join("\n")
     }
     case "education": {
+      // degree / GPA / certifications are bullets (built in resolveCv); " | " is \quad|\quad as in sample-cv.tex
+      const lines = x.bullets.map((b) => b.text.split(" | ").map(inlineToLatex).join(" \\quad|\\quad "))
       if (flavor === "overview") {
-        const degree = [f.degree, f.field].filter(Boolean).join(" in ")
-        const spec = [f.specialization && `\\textbf{Specialization:} ${inlineToLatex(f.specialization)}`, f.gpa && `\\textbf{GPA:} ${inlineToLatex(f.gpa)}`]
-          .filter(Boolean)
-          .join(" \\quad|\\quad ")
-        const lines = [
-          degree && `\\textbf{${inlineToLatex(degree)}}`,
-          spec,
-          f.certifications && `\\textbf{Certifications:} ${inlineToLatex(f.certifications)}`,
-          ...x.bullets.map((b) => inlineToLatex(b.text)),
-        ].filter(Boolean) as string[]
         const head = `\\noindent\\textbf{${e((f.school ?? "").toLocaleUpperCase("vi"))}} \\hfill ${dates}\\\\[1mm]`
         return [head, lines.length ? `\\vspace{-6mm}\n${itemize(lines, true)}` : ""].filter(Boolean).join("\n")
       }
       const school = flavor === "mine" ? e((f.school ?? "").toUpperCase()) : e(f.school ?? "")
-      const degree = [f.degree, f.field].filter(Boolean).join(" in ")
-      return [
-        `\\noindent\\textbf{${school}} \\hfill ${dates}\\\\`,
-        itemize([degree && `\\textbf{${e(degree)}}`, f.gpa && `\\textbf{GPA:} ${e(f.gpa)}`, ...x.bullets.map((b) => inlineToLatex(b.text))].filter(Boolean) as string[]),
-      ].join("\n")
+      return [`\\noindent\\textbf{${school}} \\hfill ${dates}\\\\`, itemize(lines)].filter(Boolean).join("\n")
     }
     case "project":
       return `\\noindent${projectLine(x)} \\hfill ${dates}\n${bullets()}`

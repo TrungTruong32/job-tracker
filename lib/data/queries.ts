@@ -3,6 +3,7 @@ import { cache } from "react"
 import { cookies } from "next/headers"
 import { publicAi } from "@/lib/ai/settings"
 import { aiTimeoutMs } from "@/lib/ai/timeout"
+import { EmailDraftSchema, type EmailDraft } from "@/lib/email/draft"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireUser } from "@/lib/supabase/server"
 import { pickWorkspace, type WorkspaceLite, type WorkspaceRole } from "@/lib/workspace/pick"
@@ -104,6 +105,19 @@ export async function getApplication(id: string): Promise<Application | null> {
     .maybeSingle()
   if (error) throw error
   return data as unknown as Application | null
+}
+
+export async function getEmailDraft(applicationId: string): Promise<EmailDraft | null> {
+  const { supabase, ws } = await workspaceContext()
+  const { data, error } = await supabase
+    .from("applications")
+    .select("email_draft")
+    .eq("workspace_id", ws.id)
+    .eq("id", applicationId)
+    .maybeSingle()
+  if (error) throw error
+  const parsed = EmailDraftSchema.safeParse(data?.email_draft)
+  return parsed.success ? parsed.data : null
 }
 
 export async function getEvents(applicationId?: string): Promise<StageEvent[]> {

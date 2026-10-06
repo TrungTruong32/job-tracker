@@ -23,3 +23,12 @@ export async function getProfile(): Promise<{ basics: Basics; items: ProfileItem
       .map((i) => ({ ...i, section: i.section as Section, data: (i.data ?? {}) as Record<string, unknown> })),
   }
 }
+
+/** Just the contact basics (name, email, phone, links), e.g. for an email signature. */
+export async function getProfileBasics(): Promise<Basics> {
+  const { supabase, ws } = await workspaceContext()
+  const { data, error } = await supabase.from("profiles").select("basics").eq("workspace_id", ws.id).maybeSingle()
+  if (error) throw error
+  const b = BasicsSchema.safeParse(data?.basics ?? {})
+  return b.success ? b.data : { links: [] }
+}

@@ -8,7 +8,7 @@ type Row<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tab
 export type Stage = Omit<Row<"stages">, "kind"> & { kind: StageKind }
 export type CvVersion = Row<"cv_versions">
 export type StageEvent = Row<"stage_events">
-export type Application = Omit<Row<"applications">, "ai_summary" | "ai_fit" | "search"> & {
+export type Application = Omit<Row<"applications">, "ai_summary" | "ai_fit" | "email_draft" | "search"> & {
   ai_summary: JdSummary | null
   ai_fit: StoredCvFit | null
 }

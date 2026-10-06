@@ -2,6 +2,7 @@ import { z } from "zod"
 import type { ChatMessage } from "./client"
 import { CvFitSchema, JdSummarySchema } from "./parse"
 import {
+  buildEmailMessages,
   buildExtractMessages,
   buildKeywordMessages,
   buildMatchMessages,
@@ -85,6 +86,30 @@ export const AI_TASKS = {
         )
         .default([]),
       summary: z.object({ text: z.string().min(1), reason: z.preprocess((v) => (typeof v === "string" ? v : ""), z.string()) }).nullable().optional(),
+    }),
+  },
+  write_email: {
+    input: z.object({
+      jdText: z.string().trim().min(30, "Đơn này chưa có nội dung JD để viết email"),
+      cvText: z.string().trim().min(50, "Bản CV chưa có nội dung text để viết email"),
+      company: z.string().max(200),
+      position: z.string().max(200),
+      sender: z.object({
+        full_name: z.string().max(200).nullish(),
+        email: z.string().max(200).nullish(),
+        phone: z.string().max(60).nullish(),
+        links: z.array(z.object({ label: z.string().max(100), url: z.string().max(500) })).max(10).optional(),
+      }),
+      jdEmails: z.array(z.string().max(200)).max(20),
+      language: z.enum(["auto", "vi", "en"]),
+    }),
+    messages: (i: Parameters<typeof buildEmailMessages>[0]): ChatMessage[] => buildEmailMessages(i),
+    output: z.object({
+      to: z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : null), z.string().nullable()),
+      to_name: z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : null), z.string().nullable()),
+      subject: z.preprocess((v) => (typeof v === "string" ? v.trim().slice(0, 300) : ""), z.string()),
+      subject_from_jd: z.preprocess((v) => v === true || v === "true", z.boolean()),
+      body: z.string().trim().min(1).max(20_000),
     }),
   },
   ping: {

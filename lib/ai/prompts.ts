@@ -125,3 +125,43 @@ Rules:
     { role: "user", content: JSON.stringify(input) },
   ]
 }
+
+export type EmailSender = { full_name?: string | null; email?: string | null; phone?: string | null; links?: { label: string; url: string }[] }
+
+export function buildEmailMessages(input: {
+  jdText: string
+  cvText: string
+  company: string
+  position: string
+  sender: EmailSender
+  jdEmails: string[]
+  language: "auto" | "vi" | "en"
+}): ChatMessage[] {
+  const lang =
+    input.language === "vi" ? "Vietnamese" : input.language === "en" ? "English" : "the same language as the JD (Vietnamese JD -> Vietnamese email)"
+  return [
+    {
+      role: "system",
+      content: `You write a job application email (the CV is attached) for the candidate. Return ONLY JSON:
+{"to": string | null, "to_name": string | null, "subject": string, "subject_from_jd": boolean, "body": string}
+- to: the address the JD says to send applications to, copied exactly from "jd_emails"; null if none fits.
+- to_name: the recruiter / contact person named in the JD (e.g. "Ms. Lan", "chị Hoa"), else null.
+- subject: if the JD prescribes a subject/title format (e.g. "Tiêu đề: [Vị trí] - [Họ tên]", "Subject: Application for ... - Full name"), fill that template exactly with the real values and set subject_from_jd true. Otherwise write a short clear subject like "Application for <position> - <candidate name>" in the email language and set it false.
+- body: written in ${lang}. Greeting (use to_name if known, else a polite generic greeting), 2-3 short paragraphs: the position and where it was seen, the 2-4 strongest matches between the CV and the JD with concrete evidence (years, results, technologies), a closing line that the CV is attached and the candidate is available for an interview. Then a sign-off and a signature with the candidate's name, phone, email and the most relevant link (only those given in "sender").
+- About 150-250 words. Professional, warm, no clichés, no placeholders like [Your name].
+- Never invent facts, numbers, employers or skills that are not in the CV.
+- Formatting: plain text with this markup only — blank line between paragraphs, "- " at line start for a bullet, **bold** for the few things a recruiter should notice (position title, key matching skills, years of experience, standout results, "CV đính kèm"/"attached CV"). Bold at most 8 phrases. No headings, no HTML, no other markdown.`,
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        company: input.company,
+        position: input.position,
+        sender: input.sender,
+        jd_emails: input.jdEmails,
+        jd: clip(input.jdText),
+        cv: clip(input.cvText),
+      }),
+    },
+  ]
+}

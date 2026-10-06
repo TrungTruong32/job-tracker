@@ -22,9 +22,12 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { startNavigation } from "@/components/nav/top-progress"
 import { deleteApplication, moveApplication } from "@/lib/data/actions"
 import type { Application, CvVersion, PublicSettings, Stage, StageEvent } from "@/lib/data/types"
+import type { EmailDraft } from "@/lib/email/draft"
 import { formatDate } from "@/lib/format"
+import type { Basics } from "@/lib/profile/schema"
 import { cn } from "@/lib/utils"
 import { AiPanels } from "./ai-panels"
+import { EmailDraftPanel } from "./email-draft"
 import { OptimizeCv } from "./optimize-cv"
 import { Timeline } from "./timeline"
 
@@ -35,9 +38,11 @@ type Props = {
   cvs: CvVersion[]
   settings: PublicSettings
   docs: { id: string; name: string }[]
+  emailDraft: EmailDraft | null
+  sender: Basics
 }
 
-export function ApplicationDetail({ app, events, stages, cvs, settings, docs }: Props) {
+export function ApplicationDetail({ app, events, stages, cvs, settings, docs, emailDraft, sender }: Props) {
   const [tab, setTab] = useState<"info" | "timeline">("info")
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -154,6 +159,8 @@ export function ApplicationDetail({ app, events, stages, cvs, settings, docs }: 
           </section>
 
           <AiPanels app={app} cvs={cvs} settings={settings} />
+
+          <EmailDraftPanel app={app} cvs={cvs} settings={settings} initial={emailDraft} sender={sender} />
 
           {app.jd_text?.trim() && (
             <section className="space-y-2 rounded-xl border bg-card p-4">

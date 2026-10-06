@@ -5,6 +5,7 @@ import { z } from "zod"
 import { CvFitSchema, JdSummarySchema, type StoredCvFit } from "@/lib/ai/parse"
 import { AiUpdateSchema, applyAiUpdate } from "@/lib/ai/settings"
 import { encryptSecret } from "@/lib/crypto"
+import { EmailDraftSchema, type EmailDraft } from "@/lib/email/draft"
 import { todayStr } from "@/lib/format"
 import { cookies } from "next/headers"
 import { WS_COOKIE, getCurrentWorkspace, getWorkspaces, workspaceContext } from "./queries"
@@ -190,6 +191,25 @@ export async function saveAiFit(id: string, fit: unknown, cvVersionId: string | 
       .eq("id", id)
     if (error) throw error
     refresh(`/applications/${id}`)
+    return { ok: true, data: stored }
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+/** Save (or clear, with null) the application email draft. No refresh: the editor owns the state. */
+export async function saveEmailDraft(id: string, draft: Omit<EmailDraft, "updated_at"> | null): Promise<ActionResult<EmailDraft | null>> {
+  try {
+    const stored = draft ? EmailDraftSchema.parse({ ...draft, updated_at: new Date().toISOString() }) : null
+    const { supabase, ws } = await workspaceContext()
+    const { data, error } = await supabase
+      .from("applications")
+      .update({ email_draft: stored as Json })
+      .eq("workspace_id", ws.id)
+      .eq("id", uuid.parse(id))
+      .select("id")
+    if (error) throw error
+    if (!data.length) throw new StaleError()
     return { ok: true, data: stored }
   } catch (e) {
     return fail(e)

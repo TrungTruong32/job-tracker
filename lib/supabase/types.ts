@@ -38,13 +38,13 @@ export type Database = {
                   ]
                 },"applications": {
                   Row: {
-                    "ai_fit": Json | null,"ai_summary": Json | null,"applied_at": string,"company": string,"created_at": string,"cv_version_id": string | null,"id": string,"jd_text": string | null,"jd_url": string | null,"last_activity_at": string,"location": string | null,"next_action": string | null,"next_action_due": string | null,"position": string,"salary": string | null,"search": unknown,"source": string | null,"stage_id": string,"updated_at": string,"workspace_id": string
+                    "ai_fit": Json | null,"ai_summary": Json | null,"email_draft": Json | null,"applied_at": string,"company": string,"created_at": string,"cv_version_id": string | null,"id": string,"jd_text": string | null,"jd_url": string | null,"last_activity_at": string,"location": string | null,"next_action": string | null,"next_action_due": string | null,"position": string,"salary": string | null,"search": unknown,"source": string | null,"stage_id": string,"updated_at": string,"workspace_id": string
                   }
                   Insert: {
-                    "ai_fit"?: Json | null,"ai_summary"?: Json | null,"applied_at"?: string,"company": string,"created_at"?: string,"cv_version_id"?: string | null,"id"?: string,"jd_text"?: string | null,"jd_url"?: string | null,"last_activity_at"?: string,"location"?: string | null,"next_action"?: string | null,"next_action_due"?: string | null,"position": string,"salary"?: string | null,"search"?: never,"source"?: string | null,"stage_id": string,"updated_at"?: string,"workspace_id": string
+                    "ai_fit"?: Json | null,"ai_summary"?: Json | null,"email_draft"?: Json | null,"applied_at"?: string,"company": string,"created_at"?: string,"cv_version_id"?: string | null,"id"?: string,"jd_text"?: string | null,"jd_url"?: string | null,"last_activity_at"?: string,"location"?: string | null,"next_action"?: string | null,"next_action_due"?: string | null,"position": string,"salary"?: string | null,"search"?: never,"source"?: string | null,"stage_id": string,"updated_at"?: string,"workspace_id": string
                   }
                   Update: {
-                    "ai_fit"?: Json | null,"ai_summary"?: Json | null,"applied_at"?: string,"company"?: string,"created_at"?: string,"cv_version_id"?: string | null,"id"?: string,"jd_text"?: string | null,"jd_url"?: string | null,"last_activity_at"?: string,"location"?: string | null,"next_action"?: string | null,"next_action_due"?: string | null,"position"?: string,"salary"?: string | null,"search"?: never,"source"?: string | null,"stage_id"?: string,"updated_at"?: string,"workspace_id"?: string
+                    "ai_fit"?: Json | null,"ai_summary"?: Json | null,"email_draft"?: Json | null,"applied_at"?: string,"company"?: string,"created_at"?: string,"cv_version_id"?: string | null,"id"?: string,"jd_text"?: string | null,"jd_url"?: string | null,"last_activity_at"?: string,"location"?: string | null,"next_action"?: string | null,"next_action_due"?: string | null,"position"?: string,"salary"?: string | null,"search"?: never,"source"?: string | null,"stage_id"?: string,"updated_at"?: string,"workspace_id"?: string
                   }
                   Relationships: [
                     {

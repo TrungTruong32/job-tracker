@@ -22,7 +22,7 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { startNavigation } from "@/components/nav/top-progress"
 import { deleteApplication, moveApplication } from "@/lib/data/actions"
 import type { Application, CvVersion, PublicSettings, Stage, StageEvent } from "@/lib/data/types"
-import type { EmailDraft } from "@/lib/email/draft"
+import type { EmailDraft, EmailTemplates } from "@/lib/email/draft"
 import { formatDate } from "@/lib/format"
 import type { Basics } from "@/lib/profile/schema"
 import { cn } from "@/lib/utils"
@@ -40,9 +40,10 @@ type Props = {
   docs: { id: string; name: string }[]
   emailDraft: EmailDraft | null
   sender: Basics
+  emailTemplates: EmailTemplates
 }
 
-export function ApplicationDetail({ app, events, stages, cvs, settings, docs, emailDraft, sender }: Props) {
+export function ApplicationDetail({ app, events, stages, cvs, settings, docs, emailDraft, sender, emailTemplates }: Props) {
   const [tab, setTab] = useState<"info" | "timeline">("info")
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -160,7 +161,7 @@ export function ApplicationDetail({ app, events, stages, cvs, settings, docs, em
 
           <AiPanels app={app} cvs={cvs} settings={settings} />
 
-          <EmailDraftPanel app={app} cvs={cvs} settings={settings} initial={emailDraft} sender={sender} />
+          <EmailDraftPanel app={app} cvs={cvs} settings={settings} initial={emailDraft} sender={sender} templates={emailTemplates} />
 
           {app.jd_text?.trim() && (
             <section className="space-y-2 rounded-xl border bg-card p-4">

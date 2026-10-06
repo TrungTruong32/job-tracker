@@ -1,5 +1,6 @@
 import "server-only"
 import { BasicsSchema, SECTION_KEYS, type Basics, type ProfileItem, type Section } from "@/lib/profile/schema"
+import { parseTemplates, type EmailTemplates } from "@/lib/email/draft"
 import { workspaceContext } from "./queries"
 
 export async function getProfile(): Promise<{ basics: Basics; items: ProfileItem[] }> {
@@ -24,11 +25,11 @@ export async function getProfile(): Promise<{ basics: Basics; items: ProfileItem
   }
 }
 
-/** Just the contact basics (name, email, phone, links), e.g. for an email signature. */
-export async function getProfileBasics(): Promise<Basics> {
+/** What the email writer needs: contact basics for the signature and the user's sample emails. */
+export async function getEmailProfile(): Promise<{ basics: Basics; templates: EmailTemplates }> {
   const { supabase, ws } = await workspaceContext()
-  const { data, error } = await supabase.from("profiles").select("basics").eq("workspace_id", ws.id).maybeSingle()
+  const { data, error } = await supabase.from("profiles").select("basics, email_templates").eq("workspace_id", ws.id).maybeSingle()
   if (error) throw error
   const b = BasicsSchema.safeParse(data?.basics ?? {})
-  return b.success ? b.data : { links: [] }
+  return { basics: b.success ? b.data : { links: [] }, templates: parseTemplates(data?.email_templates) }
 }

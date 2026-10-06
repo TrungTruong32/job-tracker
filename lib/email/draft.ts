@@ -22,6 +22,40 @@ export const EmailDraftSchema = z.object({
 })
 export type EmailDraft = z.infer<typeof EmailDraftSchema>
 
+export const TEMPLATE_LANGS = ["vi", "en"] as const
+export type TemplateLang = (typeof TEMPLATE_LANGS)[number]
+export const TEMPLATE_LANG_LABEL: Record<TemplateLang, string> = { vi: "Tiếng Việt", en: "English" }
+
+/** The user's own sample email for one language; the AI copies its structure, tone and sign-off. */
+export const EmailTemplateSchema = z.object({ subject: str(300), body: str(10_000) })
+export type EmailTemplate = z.infer<typeof EmailTemplateSchema>
+
+export const EmailTemplatesSchema = z.object({
+  vi: EmailTemplateSchema.optional(),
+  en: EmailTemplateSchema.optional(),
+})
+export type EmailTemplates = z.infer<typeof EmailTemplatesSchema>
+
+/** Stored value -> templates, dropping anything malformed or empty. */
+export function parseTemplates(v: unknown): EmailTemplates {
+  const out: EmailTemplates = {}
+  const raw = (v && typeof v === "object" ? v : {}) as Record<string, unknown>
+  for (const lang of TEMPLATE_LANGS) {
+    const t = EmailTemplateSchema.safeParse(raw[lang])
+    if (t.success && t.data.body.trim()) out[lang] = t.data
+  }
+  return out
+}
+
+/**
+ * Templates the AI should follow for a language choice: the one for that language, or for
+ * "auto" every saved one (the model picks the one matching the JD's language).
+ */
+export function templatesFor(templates: EmailTemplates, lang: "auto" | TemplateLang): (EmailTemplate & { language: TemplateLang })[] {
+  const langs = lang === "auto" ? TEMPLATE_LANGS : [lang]
+  return langs.flatMap((l) => (templates[l] ? [{ language: l, ...templates[l] }] : []))
+}
+
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
 
 /** Email addresses written in a text (e.g. "gửi CV về hr@abc.vn"), lowercased, deduped, in order. */

@@ -2,6 +2,14 @@
 
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import {
+  EmailTemplateSchema,
+  TEMPLATE_LANGS,
+  parseTemplates,
+  type EmailTemplate,
+  type EmailTemplates,
+  type TemplateLang,
+} from "@/lib/email/draft"
 import { buildImportWrites, cleanBasicsPatch } from "@/lib/profile/import"
 import { positionsForNew, swapPositions } from "@/lib/profile/positions"
 import { BasicsSchema, ItemDataSchemas, SECTION_KEYS, type Section } from "@/lib/profile/schema"
@@ -43,6 +51,25 @@ export async function saveBasics(input: unknown): Promise<ActionResult> {
     const { error } = await supabase.from("profiles").upsert({ workspace_id: ws.id, basics: basics as NonNullable<Json> })
     if (error) throw error
     return done(undefined)
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+/** Set (or clear, with null) the sample email for one language. Returns all templates. */
+export async function saveEmailTemplate(lang: TemplateLang, template: EmailTemplate | null): Promise<ActionResult<EmailTemplates>> {
+  try {
+    const l = z.enum(TEMPLATE_LANGS).parse(lang)
+    const t = template && template.body.trim() ? EmailTemplateSchema.parse(template) : null
+    const { supabase, ws } = await workspaceContext()
+    const { data, error: readErr } = await supabase.from("profiles").select("email_templates").eq("workspace_id", ws.id).maybeSingle()
+    if (readErr) throw readErr
+    const next: EmailTemplates = { ...parseTemplates(data?.email_templates) }
+    if (t) next[l] = t
+    else delete next[l]
+    const { error } = await supabase.from("profiles").upsert({ workspace_id: ws.id, email_templates: next as NonNullable<Json> })
+    if (error) throw error
+    return { ok: true, data: next }
   } catch (e) {
     return fail(e)
   }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { Bold, Check, Copy, ExternalLink, Eye, Loader2, Mail, PenLine, Sparkles, Trash2 } from "lucide-react"
+import { Bold, Check, Copy, ExternalLink, Eye, FileText, Loader2, Mail, PenLine, Sparkles, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -22,11 +22,23 @@ import { Textarea } from "@/components/ui/textarea"
 import { describeChainResult, runAiTask } from "@/lib/ai/browser"
 import { saveEmailDraft } from "@/lib/data/actions"
 import type { Application, CvVersion, PublicSettings } from "@/lib/data/types"
-import { bodyToHtml, bodyToText, findEmails, gmailComposeUrl, htmlToBody, keepKnownEmails, type EmailDraft } from "@/lib/email/draft"
+import {
+  bodyToHtml,
+  bodyToText,
+  findEmails,
+  gmailComposeUrl,
+  htmlToBody,
+  keepKnownEmails,
+  templatesFor,
+  TEMPLATE_LANG_LABEL,
+  type EmailDraft,
+  type EmailTemplates,
+} from "@/lib/email/draft"
 import { formatDate } from "@/lib/format"
 import type { Basics } from "@/lib/profile/schema"
 import { useStoredChoice } from "@/lib/use-stored-choice"
 import { cn } from "@/lib/utils"
+import { EmailTemplatesDialog } from "./email-templates-dialog"
 
 type Draft = Omit<EmailDraft, "updated_at">
 type Lang = "auto" | "vi" | "en"
@@ -94,12 +106,14 @@ export function EmailDraftPanel({
   settings,
   initial,
   sender,
+  templates: initialTemplates,
 }: {
   app: Application
   cvs: CvVersion[]
   settings: PublicSettings
   initial: EmailDraft | null
   sender: Basics
+  templates: EmailTemplates
 }) {
   const [draft, setDraft] = useState<Draft | null>(initial)
   const [savedAt, setSavedAt] = useState<string | null>(initial?.updated_at ?? null)
@@ -108,6 +122,8 @@ export function EmailDraftPanel({
   const [confirmRegen, setConfirmRegen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [preview, setPreview] = useState(false)
+  const [templates, setTemplates] = useState(initialTemplates)
+  const [editingTemplates, setEditingTemplates] = useState(false)
   const [lang, setLang] = useStoredChoice<Lang>("jt-email-lang", ["auto", "vi", "en"], "auto")
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   // what the server has, so autosave only fires on real changes
@@ -178,6 +194,7 @@ export function EmailDraftPanel({
         sender: { full_name: sender.full_name, email: sender.email, phone: sender.phone, links: sender.links.slice(0, 10) },
         jdEmails,
         language: lang,
+        templates: templatesFor(templates, lang),
       })
       const to = keepKnownEmails(r.data.to, jdEmails) || (jdEmails.length === 1 ? jdEmails[0] : "")
       setDraft({
@@ -267,6 +284,8 @@ export function EmailDraftPanel({
     window.open(gmailComposeUrl(draft), "_blank", "noopener,noreferrer")
   }
 
+  const usedTemplates = templatesFor(templates, lang)
+
   const missingTo = draft ? jdEmails.filter((e) => !findEmails(draft.to).includes(e)) : []
 
   return (
@@ -275,7 +294,15 @@ export function EmailDraftPanel({
         <h2 className="flex items-center gap-2 font-semibold">
           <Mail className="size-4 text-primary" /> Email ứng tuyển
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setEditingTemplates(true)} title="Mẫu email để AI viết theo">
+            <FileText /> Mẫu email
+            {usedTemplates.length > 0 && (
+              <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                {usedTemplates.map((t) => t.language.toUpperCase()).join("+")}
+              </Badge>
+            )}
+          </Button>
           {canGenerate && (
             <NativeSelect aria-label="Ngôn ngữ email" className="h-8 w-32" value={lang} onChange={(e) => setLang(e.target.value as Lang)}>
               <option value="auto">Theo JD</option>
@@ -319,6 +346,9 @@ export function EmailDraftPanel({
           ) : (
             <p>
               AI viết email dựa trên JD và “{cv.name}”: người nhận, tiêu đề (theo format JD nếu có), nội dung tô đậm ý chính.
+              {usedTemplates.length > 0
+                ? ` Viết theo mẫu ${usedTemplates.map((t) => TEMPLATE_LANG_LABEL[t.language]).join(" / ")} của bạn.`
+                : " Thêm “Mẫu email” để AI viết đúng giọng văn của bạn."}
             </p>
           )}
           <Button size="sm" variant="outline" onClick={() => setDraft({ ...EMPTY, to: jdEmails.length === 1 ? jdEmails[0] : "" })}>
@@ -459,6 +489,17 @@ export function EmailDraftPanel({
             </span>
           </div>
         </div>
+      )}
+
+      {editingTemplates && (
+        <EmailTemplatesDialog
+          open
+          onOpenChange={setEditingTemplates}
+          templates={templates}
+          onSaved={setTemplates}
+          current={draft ? { subject: draft.subject, body: draft.body } : null}
+          initialLang={lang === "en" ? "en" : "vi"}
+        />
       )}
 
       <AlertDialog open={confirmRegen} onOpenChange={setConfirmRegen}>

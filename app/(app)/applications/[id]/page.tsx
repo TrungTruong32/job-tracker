@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { ApplicationDetail } from "@/components/detail/application-detail"
 import { getCvDocuments } from "@/lib/data/cv-documents"
-import { getProfileBasics } from "@/lib/data/profile-queries"
+import { getEmailProfile } from "@/lib/data/profile-queries"
 import { getApplication, getCvs, getEmailDraft, getEvents, getPublicSettings, getStages } from "@/lib/data/queries"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: PageProps<"/applications/[id]
 export default async function ApplicationPage({ params }: PageProps<"/applications/[id]">) {
   const { id } = await params
   if (!UUID.test(id)) notFound()
-  const [app, events, stages, cvs, settings, docs, emailDraft, basics] = await Promise.all([
+  const [app, events, stages, cvs, settings, docs, emailDraft, emailProfile] = await Promise.all([
     getApplication(id),
     getEvents(id),
     getStages(),
@@ -24,7 +24,7 @@ export default async function ApplicationPage({ params }: PageProps<"/applicatio
     getPublicSettings(),
     getCvDocuments(),
     getEmailDraft(id),
-    getProfileBasics(),
+    getEmailProfile(),
   ])
   if (!app) notFound()
   return (
@@ -37,7 +37,8 @@ export default async function ApplicationPage({ params }: PageProps<"/applicatio
         settings={settings}
         docs={docs.map((d) => ({ id: d.id, name: d.name }))}
         emailDraft={emailDraft}
-        sender={basics}
+        sender={emailProfile.basics}
+        emailTemplates={emailProfile.templates}
       />
     </div>
   )

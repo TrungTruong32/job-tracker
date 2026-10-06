@@ -138,13 +138,13 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "basics": NonNullable<Json>,"created_at": string,"updated_at": string,"workspace_id": string
+                    "basics": NonNullable<Json>,"created_at": string,"email_templates": NonNullable<Json>,"updated_at": string,"workspace_id": string
                   }
                   Insert: {
-                    "basics"?: NonNullable<Json>,"created_at"?: string,"updated_at"?: string,"workspace_id": string
+                    "basics"?: NonNullable<Json>,"created_at"?: string,"email_templates"?: NonNullable<Json>,"updated_at"?: string,"workspace_id": string
                   }
                   Update: {
-                    "basics"?: NonNullable<Json>,"created_at"?: string,"updated_at"?: string,"workspace_id"?: string
+                    "basics"?: NonNullable<Json>,"created_at"?: string,"email_templates"?: NonNullable<Json>,"updated_at"?: string,"workspace_id"?: string
                   }
                   Relationships: [
                     {

@@ -102,6 +102,10 @@ export const AI_TASKS = {
       }),
       jdEmails: z.array(z.string().max(200)).max(20),
       language: z.enum(["auto", "vi", "en"]),
+      templates: z
+        .array(z.object({ language: z.enum(["vi", "en"]), subject: z.string().max(300), body: z.string().max(10_000) }))
+        .max(2)
+        .optional(),
     }),
     messages: (i: Parameters<typeof buildEmailMessages>[0]): ChatMessage[] => buildEmailMessages(i),
     output: z.object({

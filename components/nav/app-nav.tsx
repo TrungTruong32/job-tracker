@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { BarChart3, BriefcaseBusiness, FileText, LogOut, Moon, Settings, Sun, UserRound } from "lucide-react"
+import { BrandMark } from "@/components/nav/brand-mark"
 import { useTheme } from "@/components/theme-provider"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher"
@@ -57,9 +58,7 @@ export function SideNav({ email, workspaces, current }: { email: string; workspa
   return (
     <aside className="sticky top-0 hidden h-dvh w-16 shrink-0 flex-col border-r bg-sidebar p-2 sm:flex xl:w-56">
       <Link href="/" className="mb-4 flex h-12 items-center justify-center gap-2 px-2 xl:justify-start">
-        <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <BriefcaseBusiness className="size-4" />
-        </span>
+        <BrandMark className="size-8" />
         <span className="hidden min-w-0 xl:block">
           <span className="block font-semibold">Job Tracker</span>
           <span className="block truncate text-xs text-muted-foreground" title={current.name}>

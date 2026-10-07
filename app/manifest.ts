@@ -7,13 +7,12 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Theo dõi đơn ứng tuyển, JD, vòng phỏng vấn và CV",
     start_url: "/",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#2a78d6",
+    background_color: "#140B19",
+    theme_color: "#140B19",
     lang: "vi",
     icons: [
-      { src: "/pwa-icon/192", sizes: "192x192", type: "image/png" },
-      { src: "/pwa-icon/512", sizes: "512x512", type: "image/png" },
-      { src: "/pwa-icon/512", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/brand/icon-192.png", sizes: "192x192", type: "image/png" },
+      { src: "/brand/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
   }
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { BriefcaseBusiness } from "lucide-react"
+import { BrandMark } from "@/components/nav/brand-mark"
 import { LoginButtons } from "./login-buttons"
 
 export const metadata: Metadata = { title: "Đăng nhập" }
@@ -17,10 +17,9 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     <main className="flex min-h-dvh items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6 rounded-2xl border bg-card p-6 shadow-sm">
         <div className="space-y-2 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <BriefcaseBusiness className="size-6" />
-          </div>
+          <BrandMark className="mx-auto size-12" />
           <h1 className="text-xl font-semibold">Job Tracker</h1>
+          <p className="text-xs font-medium uppercase tracking-[var(--tt-tracking-sub)] text-tt-gold-deep dark:text-tt-secondary">Trung Trương</p>
           <p className="text-sm text-muted-foreground">Theo dõi đơn ứng tuyển trên mọi thiết bị</p>
         </div>
         {message && (

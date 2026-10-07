@@ -231,7 +231,7 @@ export function CvEditor({
         />
       )}
       {resolved.omitted.length > 0 && (
-        <p className="rounded-lg bg-sky-500/10 p-2 text-xs text-sky-800 dark:text-sky-200">
+        <p className="rounded-lg bg-tt-aubergine/10 p-2 text-xs text-tt-aubergine dark:bg-tt-aubergine/40 dark:text-tt-secondary">
           CV chỉ gồm Summary, Education, Work Experience, Key Skills. Không hiện: {resolved.omitted.map((o) => `${o.title} (${o.count})`).join(", ")}.
         </p>
       )}

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { canSignInFromEnv } from "@/lib/auth/allowed"
 
-const PUBLIC_PATHS = ["/login", "/auth"]
+const PUBLIC_PATHS = ["/login", "/auth", "/api/cron"] // cron routes check CRON_SECRET themselves
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })

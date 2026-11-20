@@ -18,7 +18,8 @@ export const metadata: Metadata = {
   title: { default: "Job Tracker", template: "%s · Job Tracker" },
   description: "Theo dõi đơn ứng tuyển, JD, vòng phỏng vấn và CV",
   appleWebApp: { capable: true, title: "Job Tracker", statusBarStyle: "default" },
-  metadataBase: new URL("https://your-app.vercel.app"),
+  // Vercel sets VERCEL_PROJECT_PRODUCTION_URL on every build; locally the og image resolves against localhost.
+  metadataBase: new URL(process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000"),
 }
 
 export const viewport: Viewport = {

@@ -1,0 +1,146 @@
+\documentclass[10pt,a4paper]{article}
+
+% --- CÁC GÓI CẦN THIẾT ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[left=0.5in, right=0.5in, top=0.5in, bottom=0.5in]{geometry} % Căn lề hẹp
+\usepackage{xcolor} % Hỗ trợ màu sắc
+\usepackage{hyperref} % Hỗ trợ chèn link
+\usepackage{enumitem} % Tùy chỉnh danh sách (bullet points)
+\usepackage{graphicx} % Hỗ trợ chèn ảnh (cho mã QR)
+\usepackage{helvet} % Sử dụng font Arial/Helvetica
+\renewcommand{\familydefault}{\sfdefault} % Đặt font mặc định là sans-serif
+\pagestyle{empty}
+\usepackage{setspace}
+\setstretch{1.05} % chỉnh khoảng cách dòng
+
+
+% --- TÙY CHỈNH MÀU SẮC & LỆNH ---
+% Màu xanh dương đậm cho tiêu đề (mã màu tương đương trong ảnh)
+\definecolor{cvblue}{HTML}{1F4E79}
+
+% Lệnh tạo tiêu đề có đường kẻ ngang lấp đầy phần còn lại
+\newcommand{\cvsection}[1]{
+    \vspace{1ex}
+    \noindent\textbf{\large\color{cvblue} \uppercase{#1}} \textcolor{cvblue}{\hrulefill}\par
+    \vspace{1ex}
+}
+
+% Tên project: xanh, đậm nghiêng để tách biệt với dòng chức danh | công ty
+\newcommand{\cvproject}[1]{\textcolor{cvblue}{\textbf{\textit{#1}}}}
+
+% Xóa thụt lề đầu dòng
+\setlength{\parindent}{0pt}
+
+% Cấu hình hyperlink (ẩn viền màu của link)
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    filecolor=black,
+    urlcolor=black,
+}
+
+\begin{document}
+
+% ================= HEADER =================
+\noindent
+\begin{minipage}[t]{\textwidth}
+    \centering
+    {\Huge \textbf{Nguyen Minh An}}\\[1.5mm]
+    {\Large \textbf{PRODUCT ENGINEER -- APPLIED AI}}\\[2mm]
+    \small{
+        \textbf{Phone:} 090 000 0000 \quad|\quad \textbf{Email:} \href{mailto:an.nguyen@example.com}{an.nguyen@example.com} \quad|\quad \textbf{Location:} Ho Chi Minh City \\
+        \textbf{LinkedIn:} \href{https://www.linkedin.com/in/an-nguyen-example}{\underline{an-nguyen-example}} \quad|\quad \textbf{GitHub:} \href{https://github.com/an-nguyen-example}{\underline{an-nguyen-example}} \quad|\quad \textbf{Web Portfolio:} \href{https://an-nguyen.example.com/my_portfolio/}{\underline{portfolio\_an}}
+
+    }
+\end{minipage}
+
+% Pull the QR code up level with the header block and push it to the right margin
+\vspace{-2.35cm}
+\hfill
+\begin{minipage}[t]{0.18\textwidth}
+    \raggedleft
+    \includegraphics[width=2.02cm]{qrcode.png}\\
+    % \rule{2.02cm}{2.02cm}\\[1mm]
+    \scriptsize \textbf{Portfolio QR Code}
+\end{minipage}
+
+\vspace{0.4cm}
+
+% ================= SUMMARY =================
+\cvsection{Summary}
+Computer Science graduate who turns business workflows into clear specs and \textbf{measures LLM output} against them. Built evaluation suites with support teams \textit{(GPT, Gemini, Llama via OpenRouter)}, curated the data behind a \textbf{9,000+ pair} QA benchmark \textit{(ExampleConf 2025, 91.20\% Recall@10)}, and shipped automation that cut manual work by \textbf{over 60\%}. Detail-first: reconciled totals, $\sim$400 tests.
+
+% ================= EDUCATION =================
+\cvsection{Education}
+\noindent\textbf{EXAMPLE UNIVERSITY OF SCIENCE} \hfill September 2020 - June 2024\\[1mm]
+\vspace{-6mm}
+\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt]
+    \item \textbf{Bachelor of Science in Computer Science}
+    \item \textbf{Specialization:} Data Science \quad|\quad  \textbf{GPA:} 8.40/10 \textit{(3.55/4)}
+    \item \textbf{Certifications:} IELTS 7.0 \textit{(English Proficiency)}, Workflow Automation - Coursera, Docker Fundamentals - Coursera.
+\end{itemize}
+
+% ================= WORK EXPERIENCE =================
+\cvsection{Work Experience}
+\noindent\textbf{AI Engineer} \quad|\quad \textbf{Acme Commerce} \hfill July 2025 - Present\\
+\vspace{-1mm}%
+\cvproject{LLM Evaluation \& Support Automation} \quad|\quad \textit{Python, OpenRouter, LangGraph, MCP}
+\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt]
+    \item Defined an intent taxonomy with the support team, then \textbf{benchmarked ticket-classification accuracy across LLMs}.
+    \item Prototyped \textbf{automated reply drafting} with an LLM via MCP, tuning prompts against a labelled set.
+    \item Profiled a slow document-search service: found \textbf{2 bottlenecks} and confirmed the fix with load tests.
+    \item Ran every project as a written loop \textit{(plan $\rightarrow$ build $\rightarrow$ review)}.
+\end{itemize}
+\vspace{-1mm}%
+\cvproject{Data Workflow Automation -- Order Sync Pipeline} \quad|\quad \textit{Python, PostgreSQL}
+\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt]
+    \item \textbf{Replaced a spreadsheet export} with a scheduled pipeline: \textbf{$\sim$120K rows} for 12 stores, totals reconciled with the source.
+    \item Shipped a retry-safe job that \textbf{runs nightly without manual steps} and fills gaps from missed days.
+    \item Wrote per-load data checks and \textbf{$\sim$400 automated tests}; now in \textbf{daily use} \textit{(2,100 runs, 0 failures)}.
+\end{itemize}
+\vspace{-1mm}%
+\cvproject{Marketplace Price Tracker} \quad|\quad \textit{Browser Extension, PostgreSQL}
+\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt]
+    \item \textbf{Automated competitor price collection}: 3 prototypes + an MVP handling 500 requests at 20 concurrent.
+\end{itemize}
+\vspace{-1mm}%
+\cvproject{Internal Tools -- Onboarding Checklist} \quad|\quad \textit{Next.js, TypeScript, Supabase}
+\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt]
+    \item Delivered a checklist module with \textbf{automatic reminders} and a \textbf{manager sign-off step}.
+\end{itemize}
+\vspace{1mm}
+
+\noindent\textbf{Software Engineer} \quad|\quad \textbf{Bright Labs}  \hfill July 2024 - June 2025\\
+\vspace{-1mm}%
+\cvproject{Email Marketing Automation} \quad|\quad \textit{n8n, Gemini, Django, PostgreSQL}
+\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt]
+    \item Moved newsletter and follow-up workflows into AI + n8n automation \textit{($\sim$500 emails/day)}: \textbf{over 60\%} less manual work.
+    \item Added \textbf{human review} of AI drafts before sending; refined requirements in bi-weekly sprint reviews.
+\end{itemize}
+\vspace{1mm}
+
+\noindent\textbf{Research Intern} \quad|\quad \textbf{Northwind Research Lab} \hfill June 2023 - December 2023\\
+\vspace{-1mm}%
+\cvproject{Retail Q\&A Dataset Project} \quad|\quad \href{https://doi.org/10.0000/example.0001}{\textit{\underline{Paper link}}}
+\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt]
+    \item Designed \textbf{labelling, cleaning \& scoring workflows} for a \textbf{9,000+ pair} product QA benchmark.
+    \item Benchmark backed a \textbf{RAG} baseline at \textbf{91.20\% Recall@10}; \textbf{co-authored} the \textit{ExampleConf 2025} paper.
+\end{itemize}
+\vspace{-1mm}%
+\cvproject{Campus FAQ Chatbot Project} \quad|\quad \href{https://example.com/report}{\textit{\underline{Report link}}}
+\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt]
+    \item Collected questions and use cases from students; analysed retrieval misses in the RAG pipeline.
+\end{itemize}
+
+% ================= KEY SKILLS =================
+\cvsection{Key Skills}
+\vspace{-3mm}
+\begin{itemize}[leftmargin=*, itemsep=0.5mm, parsep=1pt]
+    \item \textbf{Product \& Evaluation:} Specs \& acceptance criteria, LLM evaluation, test sets \& metrics, Scrum.
+    \item \textbf{LLM Tooling:} OpenRouter \textit{(GPT, Gemini, Llama)}, LangGraph, Hugging Face, RAG, MCP.
+    \item \textbf{Programming \& Data:} Python, SQL, Pandas, PostgreSQL, Supabase, Redis, n8n.
+    \item \textbf{Languages:} English \textit{(C1 -- IELTS)}, Vietnamese \textit{(Native)}.
+\end{itemize}
+
+\end{document}

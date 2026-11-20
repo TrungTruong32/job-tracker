@@ -34,7 +34,7 @@ export type ResolvedCv = {
   omitted: { title: string; count: number }[]
 }
 
-/** Every CV has only these sections, in this order (the owner's sample-cv.tex). */
+/** Every CV has only these sections, in this order (see test/fixtures/sample-cv.tex). */
 export const CV_SECTIONS: CvSectionKey[] = ["summary", "education", "experience", "skill"]
 /** Sections picked in the editor: CV_SECTIONS plus the ones folded into them. */
 export const EDITOR_SECTIONS: CvSectionKey[] = ["summary", "education", "certification", "experience", "project", "skill", "language"]

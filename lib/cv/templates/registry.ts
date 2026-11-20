@@ -19,7 +19,7 @@ export const TEMPLATES: Record<TemplateKey, TemplateDef> = {
   harvard: {
     key: "harvard",
     label: "Harvard (Overview)",
-    description: "Đúng bố cục sample-cv: chỉ Summary, Education, Work Experience, Key Skills; chứng chỉ gộp vào Education, ngoại ngữ gộp vào Key Skills",
+    description: "Bố cục một trang gọn: chỉ Summary, Education, Work Experience, Key Skills; chứng chỉ gộp vào Education, ngoại ngữ gộp vào Key Skills",
     defaults: { font_size: 10, line_height: 1.25, margin_mm: 12.7, accent: "#1F4E79", date_format: "MMMM YYYY", show_qr: true },
     bounds: { font_size: [8.5, 11], line_height: [1.05, 1.4], margin_mm: [9, 16] },
   },

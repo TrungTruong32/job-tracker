@@ -55,3 +55,6 @@ playwright-report/
 .env*
 .deploy.log
 .spike/
+
+# Claude Code local notes (machine-specific)
+CLAUDE.local.md

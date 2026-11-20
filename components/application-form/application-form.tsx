@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Sparkles } from "lucide-react"
+import { Loader2, Sparkles, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
 import { describeChainResult, runAiTask } from "@/lib/ai/browser"
-import { createApplication, updateApplication } from "@/lib/data/actions"
+import { cvBaseName, readCvFile, removeCvFile, storeCvFile } from "@/lib/cv/upload-client"
+import { createApplication, createCv, updateApplication } from "@/lib/data/actions"
 import type { Application, ApplicationInput, CvVersion, PublicSettings, Stage } from "@/lib/data/types"
 import { todayStr } from "@/lib/format"
 import { SOURCE_SUGGESTIONS } from "./sources"
@@ -19,6 +20,7 @@ type Props = {
   stages: Stage[]
   cvs: CvVersion[]
   settings: PublicSettings
+  workspaceId: string
   application?: Application
   onDone: (id?: string) => void
 }
@@ -45,8 +47,11 @@ function initial(stages: Stage[], cvs: CvVersion[], app?: Application): Applicat
   }
 }
 
-export function ApplicationForm({ stages, cvs, settings, application, onDone }: Props) {
-  const [v, setV] = useState<ApplicationInput>(() => initial(stages, cvs, application))
+export function ApplicationForm({ stages, cvs: initialCvs, settings, workspaceId, application, onDone }: Props) {
+  const [cvs, setCvs] = useState<Pick<CvVersion, "id" | "name" | "is_default">[]>(initialCvs)
+  const [v, setV] = useState<ApplicationInput>(() => initial(stages, initialCvs, application))
+  const [uploading, setUploading] = useState(false)
+  const cvInput = useRef<HTMLInputElement>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -80,6 +85,32 @@ export function ApplicationForm({ stages, cvs, settings, application, onDone }: 
       toast.error("AI không xử lý được", { description: e instanceof Error ? e.message : String(e) })
     } finally {
       setAiLoading(false)
+    }
+  }
+
+  // Upload a CV file from this device, save it as a new CV version and pick it for this application.
+  async function uploadCv(file: File | undefined) {
+    if (!file) return
+    setUploading(true)
+    let path: string | null = null
+    try {
+      const read = await readCvFile(file)
+      path = await storeCvFile(file, read.type, workspaceId)
+      const name = cvBaseName(file.name)
+      const res = await createCv({ name, extracted_text: read.text, file_path: path, file_type: read.type, is_default: false })
+      if (!res.ok) throw new Error(res.error)
+      const id = res.data!.id
+      setCvs((list) => [{ id, name, is_default: list.length === 0 }, ...list])
+      set("cv_version_id", id)
+      toast.success(`Đã lưu bản CV “${name}”`, {
+        description: read.tooShort ? "Rút được rất ít chữ (có thể PDF là ảnh scan) — vào trang CV để dán nội dung cho AI đọc." : "Đã chọn cho đơn này.",
+      })
+    } catch (e) {
+      if (path) await removeCvFile(path)
+      toast.error("Không lưu được file CV", { description: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setUploading(false)
+      if (cvInput.current) cvInput.current.value = ""
     }
   }
 
@@ -158,15 +189,34 @@ export function ApplicationForm({ stages, cvs, settings, application, onDone }: 
             </NativeSelect>
           </Field>
           <Field id="cv_version_id" label="Bản CV đã gửi">
-            <NativeSelect id="cv_version_id" value={v.cv_version_id ?? ""} onChange={(e) => set("cv_version_id", e.target.value || null)}>
-              <option value="">— Không chọn —</option>
-              {cvs.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                  {c.is_default ? " (mặc định)" : ""}
-                </option>
-              ))}
-            </NativeSelect>
+            <div className="flex gap-2">
+              <NativeSelect
+                id="cv_version_id"
+                className="min-w-0 flex-1"
+                value={v.cv_version_id ?? ""}
+                onChange={(e) => set("cv_version_id", e.target.value || null)}
+              >
+                <option value="">— Không chọn —</option>
+                {cvs.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.is_default ? " (mặc định)" : ""}
+                  </option>
+                ))}
+              </NativeSelect>
+              <Button type="button" variant="outline" disabled={uploading} onClick={() => cvInput.current?.click()} title="Upload file CV (.pdf, .tex) từ máy">
+                {uploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                {uploading ? "Đang lưu…" : "Upload"}
+              </Button>
+              <input
+                ref={cvInput}
+                type="file"
+                accept=".pdf,.tex,application/pdf"
+                className="hidden"
+                data-testid="application-cv-file"
+                onChange={(e) => uploadCv(e.target.files?.[0])}
+              />
+            </div>
           </Field>
           <Field id="next_action" label="Việc cần làm tiếp">
             <Input id="next_action" placeholder="vd: Follow-up HR" value={str("next_action")} onChange={(e) => set("next_action", e.target.value)} />
@@ -180,7 +230,7 @@ export function ApplicationForm({ stages, cvs, settings, application, onDone }: 
         <Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => onDone()}>
           Huỷ
         </Button>
-        <Button type="submit" className="flex-1 sm:flex-none" disabled={pending}>
+        <Button type="submit" className="flex-1 sm:flex-none" disabled={pending || uploading}>
           {pending && <Loader2 className="animate-spin" />}
           {application ? "Lưu" : "Thêm đơn"}
         </Button>

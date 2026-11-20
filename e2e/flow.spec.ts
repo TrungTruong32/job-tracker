@@ -163,6 +163,26 @@ test("upload a .tex CV and see its text extracted", async ({ page }, info) => {
   await expect(page.getByText("Mặc định")).toBeVisible()
 })
 
+test("upload a CV file from the new-application form and save it with the application", async ({ page }, info) => {
+  await login(page, info.project.name)
+  await page.getByRole("button", { name: "Thêm đơn" }).filter({ visible: true }).first().click()
+  const dialog = page.getByRole("dialog")
+  const cvName = `Form-CV-${info.project.name}`
+  const tex = String.raw`\documentclass{article}\begin{document}\section{Skills} Python, RAG\end{document}`
+  await dialog.getByTestId("application-cv-file").setInputFiles({ name: `${cvName}.tex`, mimeType: "text/x-tex", buffer: Buffer.from(tex) })
+  await expect(page.getByText(`Đã lưu bản CV “${cvName}”`)).toBeVisible()
+  const select = dialog.getByLabel("Bản CV đã gửi")
+  await expect(select.locator("option:checked")).toHaveText(cvName)
+  await dialog.getByLabel("Công ty *").fill(`CV Upload Co ${info.project.name}`)
+  await dialog.getByLabel("Vị trí *").fill("Data Engineer")
+  await dialog.getByRole("button", { name: "Thêm đơn" }).click()
+  await expect(page.getByText("Đã thêm đơn ứng tuyển")).toBeVisible()
+
+  await page.goto("/cv")
+  await expect(page.getByText(cvName, { exact: true })).toBeVisible()
+  await expect(page.getByRole("listitem").filter({ hasText: cvName }).getByText(/dùng cho 1 đơn/)).toBeVisible()
+})
+
 test("drag a card to another column (laptop)", async ({ page }, info) => {
   test.skip(info.project.name !== "laptop", "mouse drag only on laptop")
   await login(page, info.project.name)

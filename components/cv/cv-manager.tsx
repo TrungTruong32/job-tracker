@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { MAX_CV_BYTES, cvTypeOf, type CvFileType } from "@/lib/cv/file-type"
+import type { CvFileType } from "@/lib/cv/file-type"
+import { cvBaseName, readCvFile, removeCvFile, storeCvFile } from "@/lib/cv/upload-client"
 import { createCv, deleteCv, setDefaultCv, updateCv } from "@/lib/data/actions"
 import type { CvVersion } from "@/lib/data/types"
 import { formatDate } from "@/lib/format"
@@ -27,24 +28,10 @@ export function CvManager({ cvs, usage, workspaceId }: { cvs: CvVersion[]; usage
 
   async function onFile(file: File | undefined) {
     if (!file) return
-    const type = cvTypeOf(file.name)
-    if (!type) return toast.error("Chỉ hỗ trợ file .pdf hoặc .tex")
-    if (file.size > MAX_CV_BYTES) return toast.error("File quá lớn (tối đa 4MB)")
     setReading(true)
     try {
-      const body = new FormData()
-      body.append("file", file)
-      const res = await fetch("/api/cv/extract", { method: "POST", body })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setDraft({
-        name: file.name.replace(/\.(pdf|tex)$/i, ""),
-        text: data.text,
-        file,
-        type,
-        isDefault: cvs.length === 0,
-        tooShort: data.tooShort,
-      })
+      const { type, text, tooShort } = await readCvFile(file)
+      setDraft({ name: cvBaseName(file.name), text, file, type, isDefault: cvs.length === 0, tooShort })
     } catch (e) {
       toast.error("Không đọc được file", { description: e instanceof Error ? e.message : String(e) })
     } finally {
@@ -58,12 +45,11 @@ export function CvManager({ cvs, usage, workspaceId }: { cvs: CvVersion[]; usage
     startTransition(async () => {
       let filePath: string | null = null
       if (draft.file && draft.type) {
-        const supabase = createClient()
-        filePath = `${workspaceId}/${crypto.randomUUID()}.${draft.type}`
-        const { error } = await supabase.storage.from("cvs").upload(filePath, draft.file, {
-          contentType: draft.type === "pdf" ? "application/pdf" : "text/plain",
-        })
-        if (error) return void toast.error("Upload file thất bại", { description: error.message })
+        try {
+          filePath = await storeCvFile(draft.file, draft.type, workspaceId)
+        } catch (e) {
+          return void toast.error(e instanceof Error ? e.message : String(e))
+        }
       }
       const res = await createCv({
         name: draft.name,
@@ -73,7 +59,7 @@ export function CvManager({ cvs, usage, workspaceId }: { cvs: CvVersion[]; usage
         is_default: draft.isDefault,
       })
       if (!res.ok) {
-        if (filePath) await createClient().storage.from("cvs").remove([filePath])
+        if (filePath) await removeCvFile(filePath)
         return void toast.error(res.error)
       }
       toast.success("Đã lưu bản CV")

@@ -24,8 +24,10 @@ export function Board({
   stages,
   cvs,
   settings,
+  workspaceId,
   workspaceName,
 }: {
+  workspaceId: string
   workspaceName?: string
   initialApps: Application[]
   stages: Stage[]
@@ -130,6 +132,7 @@ export function Board({
             stages={stages}
             cvs={cvs}
             settings={settings}
+            workspaceId={workspaceId}
             onDone={(id) => {
               setAdding(false)
               if (id) router.refresh()

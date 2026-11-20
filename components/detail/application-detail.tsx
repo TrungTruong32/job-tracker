@@ -37,13 +37,14 @@ type Props = {
   stages: Stage[]
   cvs: CvVersion[]
   settings: PublicSettings
+  workspaceId: string
   docs: { id: string; name: string }[]
   emailDraft: EmailDraft | null
   sender: Basics
   emailTemplates: EmailTemplates
 }
 
-export function ApplicationDetail({ app, events, stages, cvs, settings, docs, emailDraft, sender, emailTemplates }: Props) {
+export function ApplicationDetail({ app, events, stages, cvs, settings, workspaceId, docs, emailDraft, sender, emailTemplates }: Props) {
   const [tab, setTab] = useState<"info" | "timeline">("info")
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -192,6 +193,7 @@ export function ApplicationDetail({ app, events, stages, cvs, settings, docs, em
             stages={stages}
             cvs={cvs}
             settings={settings}
+            workspaceId={workspaceId}
             application={app}
             onDone={() => setEditing(false)}
           />
